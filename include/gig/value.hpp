@@ -8,16 +8,14 @@
 
 namespace gig {
 
-// Forward declarations для всех объектных типов
+// ----- 1. Forward declarations -----
 struct StringObj;
 struct TableObj;
 struct FunctionObj;
 struct CFunctionObj;
 class Environment;
 
-// Тип для C-функции (использует Value, поэтому объявляем после forward)
-using CFunction = Value (*)(Environment&, const std::vector<Value>&);
-
+// ----- 2. Тип значения -----
 enum class Type : uint8_t {
     NIL,
     BOOLEAN,
@@ -30,11 +28,7 @@ enum class Type : uint8_t {
     USERDATA
 };
 
-struct CFunctionObj : public GCObject {
-    CFunction func;
-    CFunctionObj(CFunction f) : func(f) {}
-};
-
+// ----- 3. Объявление структуры Value (без реализации методов) -----
 struct Value {
     Type type;
     union {
@@ -44,7 +38,7 @@ struct Value {
         CFunctionObj* cfunc;  // для CFunctionObj
     };
 
-    // Объявления конструкторов / методов (определения позже)
+    // Конструкторы / деструктор / операторы (только объявления)
     Value();
     Value(bool b);
     Value(double n);
@@ -58,35 +52,41 @@ struct Value {
 
     bool is_object() const;
 
-    StringObj*   as_string() const;
-    TableObj*    as_table() const;
-    FunctionObj* as_function() const;
-    CFunctionObj* as_cfunction() const;
+    // Методы приведения (объявления)
     bool as_bool() const;
     double as_number() const;
+    StringObj* as_string() const;
+    TableObj* as_table() const;
+    FunctionObj* as_function() const;
+    CFunctionObj* as_cfunction() const;
 };
 
-// Оператор сравнения и хеш (объявлены, определены после включения полных типов)
+// ----- 4. Теперь, когда Value известен, объявляем CFunction и CFunctionObj -----
+using CFunction = Value (*)(Environment&, const std::vector<Value>&);
+
+struct CFunctionObj : public GCObject {
+    CFunction func;
+    CFunctionObj(CFunction f);   // объявление конструктора
+};
+
+// ----- 5. Оператор сравнения (объявление) -----
 bool operator==(const Value& a, const Value& b);
 
 } // namespace gig
 
+// ----- 6. Хеш для Value (объявление) -----
 namespace std {
     template<> struct hash<gig::Value> {
         size_t operator()(const gig::Value& v) const;
     };
 }
 
-// ------------------------------------------------------------
-// Теперь включаем полные определения всех объектных типов
-// ------------------------------------------------------------
+// ----- 7. Теперь подключаем полные определения объектных типов -----
 #include "string.hpp"
 #include "table.hpp"
 #include "function.hpp"
 
-// ------------------------------------------------------------
-// Определения методов Value (теперь все типы известны)
-// ------------------------------------------------------------
+// ----- 8. Реализации методов Value и CFunctionObj -----
 namespace gig {
 
 inline Value::Value() : type(Type::NIL) { obj = nullptr; }
@@ -135,6 +135,8 @@ inline StringObj* Value::as_string() const { return (type == Type::STRING) ? sta
 inline TableObj* Value::as_table() const { return (type == Type::TABLE) ? static_cast<TableObj*>(obj) : nullptr; }
 inline FunctionObj* Value::as_function() const { return (type == Type::FUNCTION) ? static_cast<FunctionObj*>(obj) : nullptr; }
 inline CFunctionObj* Value::as_cfunction() const { return (type == Type::CFUNCTION) ? static_cast<CFunctionObj*>(cfunc) : nullptr; }
+
+inline CFunctionObj::CFunctionObj(CFunction f) : func(f) {}
 
 inline bool operator==(const Value& a, const Value& b) {
     if (a.type != b.type) return false;
