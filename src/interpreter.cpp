@@ -1,14 +1,23 @@
-#include "function.hpp"
-#include "ast.hpp"
-#include "environment.hpp"
+#include "interpreter.hpp"
+#include "builtins.hpp"
 
 namespace gig {
 
-FunctionObj::FunctionObj(const std::vector<std::string>& p, AstBlock* b, Environment* env)
-    : params(p), body(b), closure_env(env) {}
+Interpreter::Interpreter() {
+    globals = new Environment(nullptr);
+    registerBuiltins();
+}
 
-FunctionObj::~FunctionObj() {
-    delete body;
+Interpreter::~Interpreter() {
+    delete globals;
+}
+
+Value Interpreter::execute(AstBlock* root) {
+    return root->execute(*globals);
+}
+
+void Interpreter::registerBuiltins() {
+    gig::registerBuiltins(globals);   // вызов глобальной функции
 }
 
 } // namespace gig
