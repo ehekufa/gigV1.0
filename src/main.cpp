@@ -8,6 +8,16 @@
 #include <sstream>
 #include <iostream>
 #include <string>
+#include <ctime>
+
+// ----- ЛОГГИРОВАНИЕ В ФАЙЛ debug.log -----
+void LogToFile(const std::string& msg) {
+    std::ofstream log("debug.log", std::ios::app);
+    if (log.is_open()) {
+        time_t now = time(nullptr);
+        log << ctime(&now) << " - " << msg << std::endl;
+    }
+}
 
 // ----- ВСТРОЕННЫЙ СКРИПТ (резервный) -----
 const char* embeddedScript = R"(
@@ -30,36 +40,64 @@ print("Fallback script finished.")
 HWND g_hMainWnd = NULL;
 HWND g_hEditOutput = NULL;
 HWND g_hBtnRun = NULL;
-std::string g_currentScript; // текущий скрипт для выполнения
+std::string g_currentScript;
 
-// ----- Выполнить скрипт и вывести результат в поле -----
+// ----- Выполнить скрипт и вывести результат в поле (с защитой от ошибок) -----
 void RunScriptAndDisplay(const std::string& source, const std::wstring& title = L"Output") {
-    // Перенаправляем stdout в строку
-    std::stringstream outputStream;
-    auto old_buf = std::cout.rdbuf(outputStream.rdbuf());
+    LogToFile("RunScriptAndDisplay called, source length: " + std::to_string(source.size()));
 
-    gig::Lexer lexer(source);
-    gig::Parser parser(lexer);
-    auto ast = parser.parse();
-
-    if (!ast) {
-        std::cout.rdbuf(old_buf);
-        std::string error = "Parsing failed!";
-        SetWindowTextW(g_hEditOutput, std::wstring(error.begin(), error.end()).c_str());
+    if (g_hEditOutput == NULL) {
+        LogToFile("ERROR: g_hEditOutput is NULL!");
         return;
     }
 
-    gig::Interpreter interpreter;
-    interpreter.execute(ast.get());
+    std::stringstream outputStream;
+    auto old_buf = std::cout.rdbuf(outputStream.rdbuf());
+
+    try {
+        LogToFile("Creating Lexer...");
+        gig::Lexer lexer(source);
+        LogToFile("Creating Parser...");
+        gig::Parser parser(lexer);
+        LogToFile("Parsing...");
+        auto ast = parser.parse();
+
+        if (!ast) {
+            LogToFile("Parsing failed.");
+            std::cout.rdbuf(old_buf);
+            SetWindowTextW(g_hEditOutput, L"Parsing failed!");
+            return;
+        }
+
+        LogToFile("Creating Interpreter...");
+        gig::Interpreter interpreter;
+        LogToFile("Executing...");
+        interpreter.execute(ast.get());
+        LogToFile("Execution finished.");
+    } catch (const std::exception& e) {
+        LogToFile("Exception: " + std::string(e.what()));
+        std::cout.rdbuf(old_buf);
+        std::string err = "Exception: " + std::string(e.what());
+        SetWindowTextW(g_hEditOutput, std::wstring(err.begin(), err.end()).c_str());
+        return;
+    } catch (...) {
+        LogToFile("Unknown exception!");
+        std::cout.rdbuf(old_buf);
+        SetWindowTextW(g_hEditOutput, L"Unknown exception!");
+        return;
+    }
 
     std::cout.rdbuf(old_buf);
 
     std::string output = outputStream.str();
     if (output.empty()) output = "(no output)";
 
-    // Преобразуем в wide-строку для SetWindowTextW
+    LogToFile("Output length: " + std::to_string(output.size()));
+
     std::wstring wideOutput(output.begin(), output.end());
     SetWindowTextW(g_hEditOutput, wideOutput.c_str());
+
+    LogToFile("Display complete.");
 }
 
 // ----- Загрузить скрипт из файла -----
@@ -90,33 +128,40 @@ std::wstring GetExeDir() {
 
 // ----- Загрузить скрипт для выполнения (приоритет: аргумент, test/test.gig, встроенный) -----
 std::string LoadScript() {
+    LogToFile("LoadScript called.");
+
     // Сначала проверяем, был ли передан файл через командную строку
     int argc;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (argc >= 2) {
         std::wstring path = argv[1];
         LocalFree(argv);
+        LogToFile("Argument file: " + std::string(path.begin(), path.end()));
         std::string content = ReadFileContent(path);
         if (!content.empty()) {
+            LogToFile("Loaded from argument.");
             SetWindowTextW(g_hMainWnd, L"GIG – executing file");
             return content;
         }
     }
-    LocalFree(argv);
+    if (argc > 0) LocalFree(argv);
 
     // Если нет аргумента, ищем test\test.gig рядом с EXE
     std::wstring exeDir = GetExeDir();
     std::wstring scriptPath = exeDir + L"test\\test.gig";
+    LogToFile("Looking for test.gig at: " + std::string(scriptPath.begin(), scriptPath.end()));
     DWORD attr = GetFileAttributesW(scriptPath.c_str());
     if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
         std::string content = ReadFileContent(scriptPath);
         if (!content.empty()) {
+            LogToFile("Loaded test\\test.gig.");
             SetWindowTextW(g_hMainWnd, L"GIG – executing test\\test.gig");
             return content;
         }
     }
 
     // Иначе используем встроенный
+    LogToFile("Using embedded script.");
     SetWindowTextW(g_hMainWnd, L"GIG – executing embedded script");
     return embeddedScript;
 }
@@ -125,6 +170,8 @@ std::string LoadScript() {
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_CREATE: {
+        LogToFile("WM_CREATE started.");
+
         // Создаём многострочное текстовое поле для вывода
         g_hEditOutput = CreateWindowW(L"EDIT", L"",
             WS_VISIBLE | WS_CHILD | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
@@ -137,14 +184,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             10, 320, 100, 30,
             hWnd, (HMENU)1, NULL, NULL);
 
-        // Загружаем и выполняем скрипт
+        LogToFile("Controls created.");
+
+        // Загружаем скрипт и выполняем его (с защитой)
         g_currentScript = LoadScript();
+        LogToFile("Script loaded, running...");
         RunScriptAndDisplay(g_currentScript, L"Initial output");
+        LogToFile("WM_CREATE finished.");
         break;
     }
     case WM_COMMAND: {
         if (LOWORD(wParam) == 1) { // кнопка Run
-            // Перезагружаем скрипт (по тому же приоритету) или используем текущий
+            LogToFile("Run button clicked.");
             g_currentScript = LoadScript();
             RunScriptAndDisplay(g_currentScript, L"Run pressed");
         }
@@ -156,7 +207,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         DragQueryFileW(hDrop, 0, filePath, MAX_PATH);
         DragFinish(hDrop);
 
-        // Проверяем расширение .gig
         std::wstring ext = filePath;
         if (ext.size() >= 4 && ext.substr(ext.size() - 4) == L".gig") {
             std::string content = ReadFileContent(filePath);
@@ -172,6 +222,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
     }
     case WM_DESTROY: {
+        LogToFile("WM_DESTROY.");
         PostQuitMessage(0);
         break;
     }
@@ -183,11 +234,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 // ----- ТОЧКА ВХОДА -----
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    // Инициализация общих элементов управления (для кнопок и т.д.)
+    // Очищаем лог-файл при старте
+    std::ofstream log("debug.log", std::ios::trunc);
+    log.close();
+    LogToFile("=== GIG STARTED ===");
+
+    // Инициализация общих элементов управления
     INITCOMMONCONTROLSEX icex;
     icex.dwSize = sizeof(icex);
     icex.dwICC = ICC_WIN95_CLASSES;
-    InitCommonControlsEx(&icex);
+    if (!InitCommonControlsEx(&icex)) {
+        LogToFile("InitCommonControlsEx failed.");
+        MessageBoxW(NULL, L"Failed to initialize common controls.", L"Error", MB_OK | MB_ICONERROR);
+        return 1;
+    }
 
     // Регистрируем класс окна
     WNDCLASSW wc = {};
@@ -198,6 +258,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
 
     if (!RegisterClassW(&wc)) {
+        LogToFile("RegisterClassW failed.");
         MessageBoxW(NULL, L"Failed to register window class.", L"Error", MB_OK | MB_ICONERROR);
         return 1;
     }
@@ -209,6 +270,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         NULL, NULL, hInstance, NULL);
 
     if (!g_hMainWnd) {
+        LogToFile("CreateWindowW failed.");
         MessageBoxW(NULL, L"Failed to create main window.", L"Error", MB_OK | MB_ICONERROR);
         return 1;
     }
@@ -219,6 +281,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     ShowWindow(g_hMainWnd, nCmdShow);
     UpdateWindow(g_hMainWnd);
 
+    LogToFile("Window shown.");
+
     // Цикл сообщений
     MSG msg;
     while (GetMessageW(&msg, NULL, 0, 0)) {
@@ -226,5 +290,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         DispatchMessageW(&msg);
     }
 
+    LogToFile("=== GIG EXITED ===");
     return (int)msg.wParam;
 }
