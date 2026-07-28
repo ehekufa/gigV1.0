@@ -1,20 +1,23 @@
-#pragma once
-#include "ast.hpp"
-#include "environment.hpp"
+#include "interpreter.hpp"
 #include "builtins.hpp"
 
 namespace gig {
 
-class Interpreter {
-public:
-    Interpreter();
-    ~Interpreter();
+Interpreter::Interpreter() {
+    globals = new Environment(nullptr);
+    registerBuiltins();
+}
 
-    Value execute(AstBlock* root);
+Interpreter::~Interpreter() {
+    delete globals;
+}
 
-private:
-    Environment* globals;
-    void registerBuiltins();
-};
+Value Interpreter::execute(AstBlock* root) {
+    return root->execute(*globals);
+}
+
+void Interpreter::registerBuiltins() {
+    gig::registerBuiltins(globals);
+}
 
 } // namespace gig
