@@ -1,0 +1,11 @@
+function fact(n)
+    if n == 0 then return 1 end
+    return n * fact(n - 1)
+end
+
+print(fact(5))  -- 120
+
+local t = { a = 1, b = 2 }
+t.self = t
+print(type(t))  -- table
+t.self = nil   -- разрываем цикл
