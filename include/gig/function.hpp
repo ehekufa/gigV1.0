@@ -5,11 +5,9 @@
 
 namespace gig {
 
-// Forward declarations
 class Environment;
 struct AstBlock;
 
-// Пользовательская функция (замыкание)
 struct FunctionObj : public GCObject {
     std::vector<std::string> params;
     AstBlock* body;
