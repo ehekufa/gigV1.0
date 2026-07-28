@@ -28,7 +28,6 @@ Value print_func(Environment&, const std::vector<Value>& args) {
 }
 
 Value collectgarbage_func(Environment&, const std::vector<Value>&) {
-    // GC отключён, просто выдаём сообщение
     std::cout << "GC is disabled in GIG." << std::endl;
     return Value();
 }
@@ -52,13 +51,10 @@ Value type_func(Environment&, const std::vector<Value>& args) {
 }
 
 void registerBuiltins(Environment* env) {
-    // print
     auto print_cf = new CFunctionObj(print_func);
     env->set("print", Value(print_cf));
-    // collectgarbage
     auto gc_cf = new CFunctionObj(collectgarbage_func);
     env->set("collectgarbage", Value(gc_cf));
-    // type
     auto type_cf = new CFunctionObj(type_func);
     env->set("type", Value(type_cf));
 }
