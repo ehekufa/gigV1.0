@@ -1,23 +1,24 @@
-#include "interpreter.hpp"
-#include "builtins.hpp"
+#pragma once
+#include "ast.hpp"
+#include "environment.hpp"
+
+namespace gig {
+    // Только объявление функции регистрации (без включения builtins.hpp)
+    void registerBuiltins(Environment* env);
+}
 
 namespace gig {
 
-Interpreter::Interpreter() {
-    globals = new Environment(nullptr);
-    registerBuiltins();
-}
+class Interpreter {
+public:
+    Interpreter();
+    ~Interpreter();
 
-Interpreter::~Interpreter() {
-    delete globals;
-}
+    Value execute(AstBlock* root);
 
-Value Interpreter::execute(AstBlock* root) {
-    return root->execute(*globals);
-}
-
-void Interpreter::registerBuiltins() {
-    gig::registerBuiltins(globals);
-}
+private:
+    Environment* globals;
+    void registerBuiltins();
+};
 
 } // namespace gig
