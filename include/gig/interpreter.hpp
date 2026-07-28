@@ -3,11 +3,6 @@
 #include "environment.hpp"
 
 namespace gig {
-    // Только объявление функции регистрации (без включения builtins.hpp)
-    void registerBuiltins(Environment* env);
-}
-
-namespace gig {
 
 class Interpreter {
 public:
