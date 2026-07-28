@@ -9,5 +9,8 @@ include_directories(include/gig)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
-# WIN32 делает приложение GUI-приложением (без консоли)
+# WIN32 – приложение без консоли (оконное)
 add_executable(gig WIN32 ${SOURCES})
+
+# Для Windows API (CommandLineToArgvW, MessageBox)
+target_link_libraries(gig shell32)
