@@ -7,7 +7,7 @@
 #include <windows.h>
 #include <shellapi.h>
 
-// ----- ВСТРОЕННЫЙ РЕЗЕРВНЫЙ СКРИПТ (если test/test.gig не найден) -----
+// ----- ВСТРОЕННЫЙ СКРИПТ (резервный) -----
 const char* embeddedScript = R"(
 print("Hello from GIG!")
 print("This is the embedded fallback script.")
@@ -82,6 +82,9 @@ int RunScript(const std::string& source, const std::wstring& title = L"GIG Outpu
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    // --- ОТЛАДОЧНОЕ ОКНО: всегда появляется при запуске ---
+    MessageBoxW(NULL, L"GIG started!", L"Debug", MB_OK);
+
     int argc;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (!argv) {
