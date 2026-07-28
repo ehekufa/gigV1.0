@@ -2,7 +2,7 @@
 #include "string.hpp"
 #include "environment.hpp"
 #include "function.hpp"
-#include "ast.hpp"          // <--- добавлено, чтобы видеть полное определение AstBlock
+#include "ast.hpp"          // <-- добавлено! теперь AstBlock полностью определён
 #include <iostream>
 
 namespace gig {
@@ -57,7 +57,7 @@ Value type_func(Environment&, const std::vector<Value>& args) {
 Value pcall_func(Environment& env, const std::vector<Value>& args) {
     if (args.empty()) {
         std::cout << "pcall: expected function as first argument" << std::endl;
-        return Value(); // nil
+        return Value();
     }
 
     const Value& func_val = args[0];
