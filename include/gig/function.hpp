@@ -6,14 +6,13 @@
 namespace gig {
 
 class Environment;
-class AstBlock;   // class для совпадения с ast.hpp
+class AstBlock;   // class для согласованности с ast.hpp
 
 struct FunctionObj : public GCObject {
     std::vector<std::string> params;
     AstBlock* body;
     Environment* closure_env;
 
-    // Только объявления, без тел!
     FunctionObj(const std::vector<std::string>& p, AstBlock* b, Environment* env);
     ~FunctionObj() override;
 };
