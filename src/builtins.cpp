@@ -2,7 +2,7 @@
 #include "string.hpp"
 #include "environment.hpp"
 #include "function.hpp"
-#include "ast.hpp"          // <-- ОБЯЗАТЕЛЬНО!
+#include "ast.hpp"          // <-- ЭТО ГЛАВНОЕ
 #include <iostream>
 
 namespace gig {
