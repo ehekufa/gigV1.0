@@ -1,5 +1,5 @@
 #include "interpreter.hpp"
-#include "builtins.hpp"   // теперь включаем здесь
+#include "builtins.hpp"
 
 namespace gig {
 
@@ -17,7 +17,7 @@ Value Interpreter::execute(AstBlock* root) {
 }
 
 void Interpreter::registerBuiltins() {
-    gig::registerBuiltins(globals);   // вызов глобальной функции из builtins.cpp
+    gig::registerBuiltins(globals);
 }
 
 } // namespace gig
