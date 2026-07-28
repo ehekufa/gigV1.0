@@ -8,21 +8,18 @@ namespace gig {
 
 class Environment;
 
-// Базовый класс для всех узлов AST
 class AstNode {
 public:
     virtual ~AstNode() = default;
     virtual Value execute(Environment& env) = 0;
 };
 
-// Блок выражений
 class AstBlock : public AstNode {
 public:
     std::vector<std::unique_ptr<AstNode>> statements;
     Value execute(Environment& env) override;
 };
 
-// Литералы
 class NumberExpr : public AstNode {
     double val;
 public:
@@ -49,15 +46,13 @@ public:
     Value execute(Environment& env) override;
 };
 
-// Переменная
 class Identifier : public AstNode {
+public:   // <-- теперь public
     std::string name;
-public:
     Identifier(const std::string& n) : name(n) {}
     Value execute(Environment& env) override;
 };
 
-// Присваивание
 class Assignment : public AstNode {
     std::string name;
     std::unique_ptr<AstNode> expr;
@@ -67,7 +62,6 @@ public:
     Value execute(Environment& env) override;
 };
 
-// Бинарная операция
 class BinaryOp : public AstNode {
     char op;
     std::unique_ptr<AstNode> left, right;
@@ -77,7 +71,6 @@ public:
     Value execute(Environment& env) override;
 };
 
-// Унарная операция (not, -)
 class UnaryOp : public AstNode {
     char op;
     std::unique_ptr<AstNode> expr;
@@ -86,7 +79,6 @@ public:
     Value execute(Environment& env) override;
 };
 
-// If
 class IfStmt : public AstNode {
     std::unique_ptr<AstNode> condition;
     std::unique_ptr<AstNode> then_block;
@@ -99,7 +91,6 @@ public:
     Value execute(Environment& env) override;
 };
 
-// While
 class WhileStmt : public AstNode {
     std::unique_ptr<AstNode> condition;
     std::unique_ptr<AstNode> body;
@@ -109,7 +100,6 @@ public:
     Value execute(Environment& env) override;
 };
 
-// Определение функции (создаёт объект FunctionObj)
 class FunctionDef : public AstNode {
     std::vector<std::string> params;
     std::unique_ptr<AstBlock> body;
@@ -119,7 +109,6 @@ public:
     Value execute(Environment& env) override;
 };
 
-// Вызов функции
 class Call : public AstNode {
     std::unique_ptr<AstNode> callee;
     std::vector<std::unique_ptr<AstNode>> args;
@@ -129,7 +118,6 @@ public:
     Value execute(Environment& env) override;
 };
 
-// Return
 class ReturnStmt : public AstNode {
     std::unique_ptr<AstNode> expr;
 public:
@@ -137,7 +125,6 @@ public:
     Value execute(Environment& env) override;
 };
 
-// Local объявление (пока просто присваивание в текущей области)
 class LocalStmt : public AstNode {
     std::vector<std::string> names;
     std::vector<std::unique_ptr<AstNode>> inits;
