@@ -26,7 +26,6 @@ bool Parser::match(TokenType type) {
     return false;
 }
 
-// Упрощённый парсер: только базовые конструкции
 std::unique_ptr<AstBlock> Parser::parse() {
     auto block = std::make_unique<AstBlock>();
     while (current.type != TokenType::END_OF_FILE) {
@@ -43,22 +42,19 @@ std::unique_ptr<AstNode> Parser::parseStatement() {
     if (current.type == TokenType::KW_FUNCTION) return parseFunctionDef();
     if (current.type == TokenType::KW_LOCAL) return parseLocal();
     if (current.type == TokenType::KW_RETURN) return parseReturn();
-    // Присваивание или вызов
     return parseAssignmentOrCall();
 }
 
 std::unique_ptr<AstNode> Parser::parseAssignmentOrCall() {
     auto expr = parseExpr();
     if (current.type == TokenType::ASSIGN) {
-        // предположим, что expr – это идентификатор
         auto id = dynamic_cast<Identifier*>(expr.get());
         if (!id) throw std::runtime_error("Invalid assignment target");
         std::string name = id->name;
-        advance(); // пропускаем '='
+        advance();
         auto rhs = parseExpr();
         return std::make_unique<Assignment>(name, std::move(rhs));
     }
-    // иначе возвращаем выражение (может быть вызов)
     return expr;
 }
 
@@ -68,10 +64,6 @@ std::unique_ptr<AstNode> Parser::parseIf() {
     expect(TokenType::KW_THEN);
     auto then_block = parseBlock();
     std::unique_ptr<AstNode> else_block = nullptr;
-    if (current.type == TokenType::KW_ELSEIF) {
-        // упрощённо: обрабатываем только else
-        // в реальном проекте нужна цепочка
-    }
     if (match(TokenType::KW_ELSE)) {
         else_block = parseBlock();
     }
@@ -103,9 +95,7 @@ std::unique_ptr<AstNode> Parser::parseFunctionDef() {
     expect(TokenType::RPAREN);
     auto body = parseBlock();
     expect(TokenType::KW_END);
-    // Создаём присваивание функции в глобальную переменную
     auto func_node = std::make_unique<FunctionDef>(params, std::move(body));
-    // Возвращаем узел присваивания
     return std::make_unique<Assignment>(name, std::move(func_node));
 }
 
@@ -146,11 +136,6 @@ std::unique_ptr<AstBlock> Parser::parseBlock() {
     return block;
 }
 
-// Обработка выражений (приоритеты)
-std::unique_ptr<AstNode> Parser::parseExpr() {
-    return parseBinary(0);
-}
-
 int getPrecedence(TokenType type) {
     switch (type) {
         case TokenType::OR: return 1;
@@ -163,6 +148,10 @@ int getPrecedence(TokenType type) {
         case TokenType::POWER: return 7;
         default: return 0;
     }
+}
+
+std::unique_ptr<AstNode> Parser::parseExpr() {
+    return parseBinary(0);
 }
 
 std::unique_ptr<AstNode> Parser::parseBinary(int prec) {
@@ -182,9 +171,9 @@ std::unique_ptr<AstNode> Parser::parseBinary(int prec) {
             case TokenType::MOD: op_char = '%'; break;
             case TokenType::POWER: op_char = '^'; break;
             case TokenType::LT: op_char = '<'; break;
-            case TokenType::LE: op_char = '≤'; break; // упрощённо
+            case TokenType::LE: op_char = '<'; break;   // исправлено
             case TokenType::GT: op_char = '>'; break;
-            case TokenType::GE: op_char = '≥'; break;
+            case TokenType::GE: op_char = '>'; break;   // исправлено
             case TokenType::EQ: op_char = '='; break;
             case TokenType::NE: op_char = '!'; break;
             case TokenType::CONCAT: op_char = '.'; break;
@@ -238,7 +227,6 @@ std::unique_ptr<AstNode> Parser::parsePrimary() {
         std::string name = current.lexeme;
         advance();
         auto node = std::make_unique<Identifier>(name);
-        // Если следующий токен – '(', то это вызов функции
         if (current.type == TokenType::LPAREN) {
             return parseCall(std::move(node));
         }
@@ -253,12 +241,9 @@ std::unique_ptr<AstNode> Parser::parsePrimary() {
     // Табличный литерал (упрощённо: только пустые скобки)
     if (current.type == TokenType::LBRACE) {
         advance();
-        // игнорируем содержимое
         while (current.type != TokenType::RBRACE && current.type != TokenType::END_OF_FILE) advance();
         expect(TokenType::RBRACE);
-        // создаём пустую таблицу
-        // пока что возвращаем nil (можно доработать)
-        return std::make_unique<NilExpr>(); // TODO: реализовать табличные литералы
+        return std::make_unique<NilExpr>(); // TODO: доработать
     }
     throw std::runtime_error("Unexpected token in primary: " + current.lexeme);
 }
