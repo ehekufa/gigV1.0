@@ -2,9 +2,8 @@
 #include "string.hpp"
 #include "environment.hpp"
 #include "function.hpp"
+#include "ast.hpp"          // <--- добавлено, чтобы видеть полное определение AstBlock
 #include <iostream>
-#include <exception>
-#include <stdexcept>
 
 namespace gig {
 
@@ -54,66 +53,46 @@ Value type_func(Environment&, const std::vector<Value>& args) {
     return Value(s);
 }
 
-// ----- pcall: защищённый вызов функции с перехватом исключений -----
+// ----- pcall: защищённый вызов функции -----
 Value pcall_func(Environment& env, const std::vector<Value>& args) {
-    // Проверка аргументов
     if (args.empty()) {
-        auto err_msg = new StringObj("pcall: expected function as first argument");
-        return Value(err_msg);
+        std::cout << "pcall: expected function as first argument" << std::endl;
+        return Value(); // nil
     }
 
     const Value& func_val = args[0];
     if (func_val.type != Type::FUNCTION) {
-        auto err_msg = new StringObj("pcall: first argument must be a function");
-        return Value(err_msg);
+        std::cout << "pcall: first argument must be a function" << std::endl;
+        return Value();
     }
 
     FunctionObj* func = func_val.as_function();
-    if (!func) {
-        auto err_msg = new StringObj("pcall: invalid function object");
-        return Value(err_msg);
-    }
+    if (!func) return Value();
 
-    // Пытаемся выполнить функцию в защищённом режиме
-    try {
-        // Создаём новое окружение для вызова (родитель – текущее)
-        Environment call_env(&env);
+    // Создаём новое окружение для вызова (родитель – текущее)
+    Environment call_env(&env);
 
-        // Передаём аргументы (начиная со второго) параметрам функции
-        size_t param_count = func->params.size();
-        size_t arg_count = args.size() - 1; // первый аргумент – сама функция
+    // Передаём аргументы (начиная со второго) параметрам функции
+    size_t param_count = func->params.size();
+    size_t arg_count = args.size() - 1; // первый аргумент – сама функция
 
-        for (size_t i = 0; i < param_count; ++i) {
-            if (i < arg_count) {
-                call_env.set(func->params[i], args[i + 1]);
-            } else {
-                call_env.set(func->params[i], Value()); // nil для недостающих
-            }
+    for (size_t i = 0; i < param_count; ++i) {
+        if (i < arg_count) {
+            call_env.set(func->params[i], args[i + 1]);
+        } else {
+            call_env.set(func->params[i], Value()); // nil для недостающих
         }
-
-        // Выполняем тело функции
-        call_env.returned = false;
-        Value result = func->body->execute(call_env);
-
-        // Если был return, возвращаем результат, иначе nil
-        Value final_result = call_env.returned ? result : Value();
-
-        // Возвращаем два значения: true (успех) и результат
-        // Но так как GIG пока не поддерживает множественные возвраты,
-        // вернём результат как есть (или можно вернуть пару в таблице).
-        // Для простоты возвращаем сам результат.
-        return final_result;
     }
-    catch (const std::exception& e) {
-        // Перехватываем исключение и возвращаем его текст как строку
-        auto err_msg = new StringObj(e.what());
-        return Value(err_msg);
+
+    // Выполняем тело функции
+    call_env.returned = false;
+    Value result = func->body->execute(call_env);
+
+    // Если был return, возвращаем результат, иначе nil
+    if (call_env.returned) {
+        return result;
     }
-    catch (...) {
-        // Ловим любые другие исключения
-        auto err_msg = new StringObj("pcall: unknown error occurred");
-        return Value(err_msg);
-    }
+    return Value(); // nil
 }
 
 void registerBuiltins(Environment* env) {
@@ -126,6 +105,7 @@ void registerBuiltins(Environment* env) {
     auto type_cf = new CFunctionObj(type_func);
     env->set("type", Value(type_cf));
 
+    // Регистрируем pcall
     auto pcall_cf = new CFunctionObj(pcall_func);
     env->set("pcall", Value(pcall_cf));
 }
