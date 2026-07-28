@@ -6,7 +6,7 @@
 namespace gig {
 
 class Environment;
-struct AstBlock;
+class AstBlock;   // теперь class, чтобы совпадало с ast.hpp
 
 struct FunctionObj : public GCObject {
     std::vector<std::string> params;
