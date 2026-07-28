@@ -2,7 +2,7 @@
 #include "string.hpp"
 #include "environment.hpp"
 #include "function.hpp"
-#include "ast.hpp"          // <-- ЭТО ГЛАВНОЕ
+#include "ast.hpp"
 #include <iostream>
 
 namespace gig {
@@ -55,18 +55,27 @@ Value type_func(Environment&, const std::vector<Value>& args) {
 
 Value pcall_func(Environment& env, const std::vector<Value>& args) {
     if (args.empty()) {
-        std::cout << "pcall: expected function as first argument" << std::endl;
+        std::cerr << "pcall: expected function as first argument" << std::endl;
         return Value();
     }
 
     const Value& func_val = args[0];
     if (func_val.type != Type::FUNCTION) {
-        std::cout << "pcall: first argument must be a function" << std::endl;
+        std::cerr << "pcall: first argument must be a function" << std::endl;
         return Value();
     }
 
     FunctionObj* func = func_val.as_function();
-    if (!func) return Value();
+    if (!func) {
+        std::cerr << "pcall: invalid function object" << std::endl;
+        return Value();
+    }
+
+    // Критическая проверка: если тело функции отсутствует – выходим
+    if (!func->body) {
+        std::cerr << "pcall: function has no body (nullptr)" << std::endl;
+        return Value();
+    }
 
     Environment call_env(&env);
 
