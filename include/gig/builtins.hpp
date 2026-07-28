@@ -5,11 +5,12 @@
 
 namespace gig {
 
-class Environment;   // forward
+class Environment;
 
 Value print_func(Environment& env, const std::vector<Value>& args);
 Value collectgarbage_func(Environment& env, const std::vector<Value>& args);
 Value type_func(Environment& env, const std::vector<Value>& args);
+Value pcall_func(Environment& env, const std::vector<Value>& args);
 
 void registerBuiltins(Environment* env);
 
