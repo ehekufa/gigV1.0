@@ -1,6 +1,6 @@
 #include "function.hpp"
-#include "ast.hpp"      // для AstBlock
-#include "environment.hpp" // для Environment
+#include "ast.hpp"
+#include "environment.hpp"
 
 namespace gig {
 
