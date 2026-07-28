@@ -1,11 +1,42 @@
+-- Пример скрипта для языка GIG
+print("Hello from GIG!")
+
+-- Факториал
 function fact(n)
     if n == 0 then return 1 end
     return n * fact(n - 1)
 end
 
-print(fact(5))  -- 120
+local result = fact(5)
+print("fact(5) =", result)   -- 120
 
-local t = { a = 1, b = 2 }
+-- Работа с таблицами и циклами
+local t = { a = 1, b = 2, c = 3 }
 t.self = t
-print(type(t))  -- table
-t.self = nil   -- разрываем цикл
+print("type(t) =", type(t))  -- table
+
+-- Ручной разрыв цикла (чтобы избежать утечки)
+t.self = nil
+
+-- Тестирование pcall
+function div(a, b)
+    if b == 0 then
+        return nil, "division by zero"
+    end
+    return a / b
+end
+
+local ok, res = pcall(div, 10, 2)
+if ok then
+    print("10 / 2 =", res)
+else
+    print("Error:", res)
+end
+
+-- Проверка обработки ошибки (деление на ноль)
+local ok2, res2 = pcall(div, 10, 0)
+if not ok2 then
+    print("Caught error:", res2)
+end
+
+print("Script finished.")
