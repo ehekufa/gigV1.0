@@ -20,8 +20,15 @@ jobs:
       - name: Build the project
         run: cmake --build build --config Release
 
+      - name: Copy test folder to output
+        run: |
+          mkdir build\Release\test
+          copy test\test.gig build\Release\test\
+
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4
         with:
           name: gig-windows
-          path: build/Release/gig.exe
+          path: |
+            build/Release/gig.exe
+            build/Release/test/
