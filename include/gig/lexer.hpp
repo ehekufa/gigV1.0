@@ -7,22 +7,19 @@
 namespace gig {
 
 enum class TokenType {
-    // Разделители
     LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET,
     COMMA, SEMICOLON, COLON, DOT,
-    // Операторы
     ASSIGN, PLUS, MINUS, STAR, SLASH, MOD, POWER,
     EQ, NE, LT, LE, GT, GE,
     NOT, AND, OR,
-    CONCAT,
-    // Ключевые слова
+    CONCAT,        // ..
+    ELLIPSIS,      // ...   <-- добавлено
     KW_IF, KW_ELSE, KW_ELSEIF, KW_THEN, KW_END,
     KW_WHILE, KW_DO, KW_FOR, KW_IN,
     KW_FUNCTION, KW_LOCAL, KW_RETURN, KW_BREAK,
     KW_NIL, KW_TRUE, KW_FALSE,
-    // Прочее
     IDENTIFIER, NUMBER, STRING,
-    COMMENT, // пропускаем
+    COMMENT,
     END_OF_FILE
 };
 
@@ -48,7 +45,7 @@ private:
     Token readIdentifier();
     Token readNumber();
     Token readString();
-    Token readComment(); // пропускаем
+    Token readComment();
     Token makeToken(TokenType type, const std::string& lex);
 };
 
