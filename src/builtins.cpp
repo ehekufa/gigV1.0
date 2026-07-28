@@ -2,7 +2,7 @@
 #include "string.hpp"
 #include "environment.hpp"
 #include "function.hpp"
-#include "ast.hpp"          // <-- добавлено! теперь AstBlock полностью определён
+#include "ast.hpp"          // <-- ОБЯЗАТЕЛЬНО!
 #include <iostream>
 
 namespace gig {
@@ -53,7 +53,6 @@ Value type_func(Environment&, const std::vector<Value>& args) {
     return Value(s);
 }
 
-// ----- pcall: защищённый вызов функции -----
 Value pcall_func(Environment& env, const std::vector<Value>& args) {
     if (args.empty()) {
         std::cout << "pcall: expected function as first argument" << std::endl;
@@ -69,30 +68,26 @@ Value pcall_func(Environment& env, const std::vector<Value>& args) {
     FunctionObj* func = func_val.as_function();
     if (!func) return Value();
 
-    // Создаём новое окружение для вызова (родитель – текущее)
     Environment call_env(&env);
 
-    // Передаём аргументы (начиная со второго) параметрам функции
     size_t param_count = func->params.size();
-    size_t arg_count = args.size() - 1; // первый аргумент – сама функция
+    size_t arg_count = args.size() - 1;
 
     for (size_t i = 0; i < param_count; ++i) {
         if (i < arg_count) {
             call_env.set(func->params[i], args[i + 1]);
         } else {
-            call_env.set(func->params[i], Value()); // nil для недостающих
+            call_env.set(func->params[i], Value());
         }
     }
 
-    // Выполняем тело функции
     call_env.returned = false;
     Value result = func->body->execute(call_env);
 
-    // Если был return, возвращаем результат, иначе nil
     if (call_env.returned) {
         return result;
     }
-    return Value(); // nil
+    return Value();
 }
 
 void registerBuiltins(Environment* env) {
@@ -105,7 +100,6 @@ void registerBuiltins(Environment* env) {
     auto type_cf = new CFunctionObj(type_func);
     env->set("type", Value(type_cf));
 
-    // Регистрируем pcall
     auto pcall_cf = new CFunctionObj(pcall_func);
     env->set("pcall", Value(pcall_cf));
 }
