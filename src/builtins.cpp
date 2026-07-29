@@ -14,17 +14,13 @@ Value print_func(Environment&, const std::vector<Value>& args) {
             case Type::NIL: std::cout << "nil"; break;
             case Type::BOOLEAN: std::cout << (v.boolean ? "true" : "false"); break;
             case Type::NUMBER: std::cout << v.number; break;
-            case Type::STRING: {
-                auto s = v.as_string();
-                if (s) std::cout << s->data;
-                break;
-            }
+            case Type::STRING: { auto s = v.as_string(); if (s) std::cout << s->data; break; }
             case Type::TABLE: std::cout << "table"; break;
             case Type::FUNCTION: std::cout << "function"; break;
             case Type::CFUNCTION: std::cout << "cfunction"; break;
             default: std::cout << "?";
         }
-        if (i != args.size() - 1) std::cout << "\t";
+        if (i != args.size()-1) std::cout << "\t";
     }
     std::cout << std::endl;
     return Value();
@@ -54,63 +50,48 @@ Value type_func(Environment&, const std::vector<Value>& args) {
 }
 
 Value pcall_func(Environment& env, const std::vector<Value>& args) {
-    if (args.empty()) {
-        std::cerr << "pcall: expected function as first argument" << std::endl;
-        return Value();
-    }
-
+    if (args.empty()) return Value();
     const Value& func_val = args[0];
-    if (func_val.type != Type::FUNCTION) {
-        std::cerr << "pcall: first argument must be a function" << std::endl;
-        return Value();
-    }
-
+    if (func_val.type != Type::FUNCTION) return Value();
     FunctionObj* func = func_val.as_function();
-    if (!func) {
-        std::cerr << "pcall: invalid function object" << std::endl;
-        return Value();
-    }
-
-    // Критическая проверка: если тело функции отсутствует – выходим
-    if (!func->body) {
-        std::cerr << "pcall: function has no body (nullptr)" << std::endl;
-        return Value();
-    }
+    if (!func || !func->body) return Value();
 
     Environment call_env(&env);
-
     size_t param_count = func->params.size();
     size_t arg_count = args.size() - 1;
-
     for (size_t i = 0; i < param_count; ++i) {
-        if (i < arg_count) {
-            call_env.set(func->params[i], args[i + 1]);
-        } else {
-            call_env.set(func->params[i], Value());
-        }
+        if (i < arg_count) call_env.set(func->params[i], args[i+1]);
+        else call_env.set(func->params[i], Value());
     }
-
     call_env.returned = false;
     Value result = func->body->execute(call_env);
-
-    if (call_env.returned) {
-        return result;
-    }
+    if (call_env.returned) return result;
     return Value();
 }
 
+// ----- Графические функции объявлены как extern (определены в main.cpp) -----
+extern Value draw_pixel_func(Environment&, const std::vector<Value>&);
+extern Value draw_rect_func(Environment&, const std::vector<Value>&);
+extern Value draw_circle_func(Environment&, const std::vector<Value>&);
+extern Value draw_text_func(Environment&, const std::vector<Value>&);
+extern Value clear_func(Environment&, const std::vector<Value>&);
+extern Value update_func(Environment&, const std::vector<Value>&);
+extern Value key_pressed_func(Environment&, const std::vector<Value>&);
+
 void registerBuiltins(Environment* env) {
-    auto print_cf = new CFunctionObj(print_func);
-    env->set("print", Value(print_cf));
+    env->set("print", Value(new CFunctionObj(print_func)));
+    env->set("collectgarbage", Value(new CFunctionObj(collectgarbage_func)));
+    env->set("type", Value(new CFunctionObj(type_func)));
+    env->set("pcall", Value(new CFunctionObj(pcall_func)));
 
-    auto gc_cf = new CFunctionObj(collectgarbage_func);
-    env->set("collectgarbage", Value(gc_cf));
-
-    auto type_cf = new CFunctionObj(type_func);
-    env->set("type", Value(type_cf));
-
-    auto pcall_cf = new CFunctionObj(pcall_func);
-    env->set("pcall", Value(pcall_cf));
+    // Графика
+    env->set("draw_pixel", Value(new CFunctionObj(draw_pixel_func)));
+    env->set("draw_rect", Value(new CFunctionObj(draw_rect_func)));
+    env->set("draw_circle", Value(new CFunctionObj(draw_circle_func)));
+    env->set("draw_text", Value(new CFunctionObj(draw_text_func)));
+    env->set("clear", Value(new CFunctionObj(clear_func)));
+    env->set("update", Value(new CFunctionObj(update_func)));
+    env->set("key_pressed", Value(new CFunctionObj(key_pressed_func)));
 }
 
 } // namespace gig
