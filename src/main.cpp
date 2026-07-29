@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include "interpreter.hpp"
 #include "lexer.hpp"
 #include "parser.hpp"
@@ -129,6 +130,90 @@ HWND g_hEditOutput = NULL;
 HWND g_hBtnRun = NULL;
 std::string g_currentScript;
 
+// ----- ПРОТОТИПЫ ОБРАБОТЧИКОВ -----
+LRESULT CALLBACK MainWndProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK CanvasWndProc(HWND, UINT, WPARAM, LPARAM);
+
+// ----- ОБРАБОТЧИК ОКНА -----
+LRESULT CALLBACK MainWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_CREATE: {
+        LogToFile("WM_CREATE started.");
+        g_hEditOutput = CreateWindowW(L"EDIT", L"", WS_VISIBLE | WS_CHILD | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
+            10, 10, 400, 180, hWnd, NULL, NULL, NULL);
+        g_hBtnRun = CreateWindowW(L"BUTTON", L"Run Script", WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+            10, 200, 100, 30, hWnd, (HMENU)1, NULL, NULL);
+        g_hCanvas = CreateWindowW(L"STATIC", L"", WS_VISIBLE | WS_CHILD | SS_OWNERDRAW,
+            420, 10, SCREEN_WIDTH, SCREEN_HEIGHT, hWnd, NULL, NULL, NULL);
+        SetWindowLongPtrW(g_hCanvas, GWLP_WNDPROC, (LONG_PTR)CanvasWndProc);
+        LogToFile("Controls created.");
+        g_currentScript = LoadScript();
+        RunScriptAndDisplay(g_currentScript, L"Initial output");
+        break;
+    }
+    case WM_COMMAND:
+        if (LOWORD(wParam) == 1) {
+            g_currentScript = LoadScript();
+            RunScriptAndDisplay(g_currentScript, L"Run pressed");
+        }
+        break;
+    case WM_DROPFILES: {
+        HDROP hDrop = (HDROP)wParam;
+        wchar_t filePath[MAX_PATH];
+        DragQueryFileW(hDrop, 0, filePath, MAX_PATH);
+        DragFinish(hDrop);
+        std::wstring ext = filePath;
+        if (ext.size() >= 4 && ext.substr(ext.size()-4) == L".gig") {
+            std::string content = ReadFileContent(filePath);
+            if (!content.empty()) {
+                g_currentScript = content;
+                SetWindowTextW(g_hMainWnd, L"GIG – executing dropped file");
+                RunScriptAndDisplay(g_currentScript, L"Dropped file");
+            }
+        } else {
+            MessageBoxW(hWnd, L"Please drop a .gig file.", L"Warning", MB_OK);
+        }
+        break;
+    }
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        break;
+    default:
+        return DefWindowProcW(hWnd, msg, wParam, lParam);
+    }
+    return 0;
+}
+
+// ----- ОБРАБОТЧИК ХОЛСТА (клавиши) -----
+LRESULT CALLBACK CanvasWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_KEYDOWN:
+        keyStates[(int)wParam] = true;
+        return 0;
+    case WM_KEYUP:
+        keyStates[(int)wParam] = false;
+        return 0;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hWnd, &ps);
+        BITMAPINFO bmi = {};
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth = SCREEN_WIDTH;
+        bmi.bmiHeader.biHeight = -SCREEN_HEIGHT;
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+        SetDIBitsToDevice(hdc, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT,
+                          0, 0, 0, SCREEN_HEIGHT,
+                          screenBuffer.data(), &bmi, DIB_RGB_COLORS);
+        EndPaint(hWnd, &ps);
+        return 0;
+    }
+    default:
+        return DefWindowProc(hWnd, msg, wParam, lParam);
+    }
+}
+
 // ----- ВЫПОЛНЕНИЕ СКРИПТА -----
 void RunScriptAndDisplay(const std::string& source, const std::wstring& title = L"Output") {
     LogToFile("RunScriptAndDisplay called");
@@ -216,90 +301,6 @@ std::string LoadScript() {
     }
     SetWindowTextW(g_hMainWnd, L"GIG – executing embedded script");
     return embeddedScript;
-}
-
-// ----- ОБРАБОТЧИК ОКНА -----
-LRESULT CALLBACK MainWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    switch (msg) {
-    case WM_CREATE: {
-        LogToFile("WM_CREATE started.");
-        // Панель вывода текста
-        g_hEditOutput = CreateWindowW(L"EDIT", L"", WS_VISIBLE | WS_CHILD | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
-            10, 10, 400, 180, hWnd, NULL, NULL, NULL);
-        // Кнопка Run
-        g_hBtnRun = CreateWindowW(L"BUTTON", L"Run Script", WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-            10, 200, 100, 30, hWnd, (HMENU)1, NULL, NULL);
-        // Холст для рисования
-        g_hCanvas = CreateWindowW(L"STATIC", L"", WS_VISIBLE | WS_CHILD | SS_OWNERDRAW,
-            420, 10, SCREEN_WIDTH, SCREEN_HEIGHT, hWnd, NULL, NULL, NULL);
-        // Подкласс для холста (чтобы ловить клавиши)
-        SetWindowLongPtrW(g_hCanvas, GWLP_WNDPROC, (LONG_PTR)CanvasWndProc);
-        LogToFile("Controls created.");
-        g_currentScript = LoadScript();
-        RunScriptAndDisplay(g_currentScript, L"Initial output");
-        break;
-    }
-    case WM_COMMAND:
-        if (LOWORD(wParam) == 1) {
-            g_currentScript = LoadScript();
-            RunScriptAndDisplay(g_currentScript, L"Run pressed");
-        }
-        break;
-    case WM_DROPFILES: {
-        HDROP hDrop = (HDROP)wParam;
-        wchar_t filePath[MAX_PATH];
-        DragQueryFileW(hDrop, 0, filePath, MAX_PATH);
-        DragFinish(hDrop);
-        std::wstring ext = filePath;
-        if (ext.size() >= 4 && ext.substr(ext.size()-4) == L".gig") {
-            std::string content = ReadFileContent(filePath);
-            if (!content.empty()) {
-                g_currentScript = content;
-                SetWindowTextW(g_hMainWnd, L"GIG – executing dropped file");
-                RunScriptAndDisplay(g_currentScript, L"Dropped file");
-            }
-        } else {
-            MessageBoxW(hWnd, L"Please drop a .gig file.", L"Warning", MB_OK);
-        }
-        break;
-    }
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        break;
-    default:
-        return DefWindowProcW(hWnd, msg, wParam, lParam);
-    }
-    return 0;
-}
-
-// ----- ОБРАБОТЧИК ХОЛСТА (клавиши) -----
-LRESULT CALLBACK CanvasWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    switch (msg) {
-    case WM_KEYDOWN:
-        keyStates[(int)wParam] = true;
-        return 0;
-    case WM_KEYUP:
-        keyStates[(int)wParam] = false;
-        return 0;
-    case WM_PAINT: {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hWnd, &ps);
-        BITMAPINFO bmi = {};
-        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        bmi.bmiHeader.biWidth = SCREEN_WIDTH;
-        bmi.bmiHeader.biHeight = -SCREEN_HEIGHT;
-        bmi.bmiHeader.biPlanes = 1;
-        bmi.bmiHeader.biBitCount = 32;
-        bmi.bmiHeader.biCompression = BI_RGB;
-        SetDIBitsToDevice(hdc, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT,
-                          0, 0, 0, SCREEN_HEIGHT,
-                          screenBuffer.data(), &bmi, DIB_RGB_COLORS);
-        EndPaint(hWnd, &ps);
-        return 0;
-    }
-    default:
-        return DefWindowProc(hWnd, msg, wParam, lParam);
-    }
 }
 
 // ----- ТОЧКА ВХОДА -----
