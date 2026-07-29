@@ -21,19 +21,6 @@ bool screenDirty = true;
 HWND g_hCanvas = NULL;
 std::map<int, bool> keyStates;
 
-// Глобальные переменные
-HWND g_hMainWnd = NULL;
-HWND g_hEditOutput = NULL;
-HWND g_hBtnRun = NULL;
-std::string g_currentScript;
-
-// ----- ПРОТОТИПЫ ФУНКЦИЙ (чтобы компилятор знал о них) -----
-void LogToFile(const std::string& msg);
-std::string ReadFileContent(const std::wstring& path);
-std::wstring GetExeDir();
-std::string LoadScript();
-void RunScriptAndDisplay(const std::string& source, const std::wstring& title);
-
 // ----- ГРАФИЧЕСКИЕ ФУНКЦИИ (С++) -----
 void draw_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
     if (x < 0 || x >= SCREEN_WIDTH || y < 0 || y >= SCREEN_HEIGHT) return;
@@ -41,33 +28,40 @@ void draw_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
     screenBuffer[y * SCREEN_WIDTH + x] = color;
     screenDirty = true;
 }
+
 void draw_rect(int x, int y, int w, int h, uint8_t r, uint8_t g, uint8_t b) {
     for (int dy = 0; dy < h; ++dy)
         for (int dx = 0; dx < w; ++dx)
             draw_pixel(x + dx, y + dy, r, g, b);
 }
+
 void draw_circle(int cx, int cy, int radius, uint8_t r, uint8_t g, uint8_t b) {
     for (int y = -radius; y <= radius; ++y)
         for (int x = -radius; x <= radius; ++x)
             if (x*x + y*y <= radius*radius)
                 draw_pixel(cx + x, cy + y, r, g, b);
 }
+
 void draw_text(int x, int y, const std::string& text) {
     HDC hdc = GetDC(g_hCanvas);
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, RGB(255,255,255));
+    SetTextColor(hdc, RGB(0, 0, 0)); // ЧЁРНЫЙ ТЕКСТ
     TextOutA(hdc, x, y, text.c_str(), (int)text.size());
     ReleaseDC(g_hCanvas, hdc);
 }
+
 void clear_screen() {
-    std::fill(screenBuffer.begin(), screenBuffer.end(), 0xFF000000);
+    // БЕЛЫЙ ФОН (0xFFFFFFFF)
+    std::fill(screenBuffer.begin(), screenBuffer.end(), 0xFFFFFFFF);
     screenDirty = true;
 }
+
 void flip_screen() {
     screenDirty = true;
     InvalidateRect(g_hCanvas, NULL, FALSE);
     UpdateWindow(g_hCanvas);
 }
+
 bool is_key_pressed(const std::string& keyName) {
     int vk = 0;
     if (keyName == "up") vk = VK_UP;
@@ -119,7 +113,7 @@ void LogToFile(const std::string& msg) {
 // ----- БЕЗОПАСНЫЙ СКРИПТ (с графикой) -----
 const char* safeScript = R"(
 print("GIG Game Demo")
-print("Drawing a red rectangle, blue circle and text.")
+print("Drawing shapes on white background.")
 clear()
 draw_rect(100, 100, 200, 150, 255, 0, 0)
 draw_circle(400, 200, 80, 0, 0, 255)
@@ -137,7 +131,48 @@ draw_text(200, 350, "Hello from GIG!")
 update()
 )";
 
-// ----- ЧТЕНИЕ ФАЙЛА -----
+// Глобальные переменные
+HWND g_hMainWnd = NULL;
+HWND g_hEditOutput = NULL;
+HWND g_hBtnRun = NULL;
+std::string g_currentScript;
+
+// ----- ПРОТОТИПЫ -----
+std::string ReadFileContent(const std::wstring& path);
+std::string LoadScript();
+void RunScriptAndDisplay(const std::string& source, const std::wstring& title);
+
+// ----- ОБРАБОТЧИК ХОЛСТА (клавиши) -----
+LRESULT CALLBACK CanvasWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_KEYDOWN:
+        keyStates[(int)wParam] = true;
+        return 0;
+    case WM_KEYUP:
+        keyStates[(int)wParam] = false;
+        return 0;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hWnd, &ps);
+        BITMAPINFO bmi = {};
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth = SCREEN_WIDTH;
+        bmi.bmiHeader.biHeight = -SCREEN_HEIGHT;
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+        SetDIBitsToDevice(hdc, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT,
+                          0, 0, 0, SCREEN_HEIGHT,
+                          screenBuffer.data(), &bmi, DIB_RGB_COLORS);
+        EndPaint(hWnd, &ps);
+        return 0;
+    }
+    default:
+        return DefWindowProc(hWnd, msg, wParam, lParam);
+    }
+}
+
+// ----- ФУНКЦИИ РАБОТЫ СО СКРИПТАМИ -----
 std::string ReadFileContent(const std::wstring& path) {
     int size_needed = WideCharToMultiByte(CP_UTF8, 0, path.c_str(), -1, NULL, 0, NULL, NULL);
     std::string filename(size_needed, 0);
@@ -150,7 +185,6 @@ std::string ReadFileContent(const std::wstring& path) {
     return buffer.str();
 }
 
-// ----- ПУТЬ К EXE -----
 std::wstring GetExeDir() {
     wchar_t buffer[MAX_PATH];
     GetModuleFileNameW(NULL, buffer, MAX_PATH);
@@ -160,7 +194,6 @@ std::wstring GetExeDir() {
     return exePath;
 }
 
-// ----- ЗАГРУЗКА СКРИПТА -----
 std::string LoadScript() {
     int argc; LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (argc >= 2) {
@@ -177,11 +210,10 @@ std::string LoadScript() {
         if (!content.empty()) { SetWindowTextW(g_hMainWnd, L"GIG – executing test\\test.gig"); return content; }
     }
     SetWindowTextW(g_hMainWnd, L"GIG – executing embedded script");
-    return embeddedScript;
+    return std::string(embeddedScript);
 }
 
-// ----- ВЫПОЛНЕНИЕ СКРИПТА -----
-void RunScriptAndDisplay(const std::string& source, const std::wstring& title = L"Output") {
+void RunScriptAndDisplay(const std::string& source, const std::wstring& title) {
     LogToFile("RunScriptAndDisplay called");
     if (!g_hEditOutput) return;
     SetWindowTextW(g_hEditOutput, L"Running...");
@@ -230,11 +262,7 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title = 
     }
 }
 
-// ----- ПРОТОТИПЫ ОБРАБОТЧИКОВ ОКОН (уже объявлены) -----
-LRESULT CALLBACK MainWndProc(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK CanvasWndProc(HWND, UINT, WPARAM, LPARAM);
-
-// ----- ОБРАБОТЧИК ОКНА -----
+// ----- ОБРАБОТЧИК ГЛАВНОГО ОКНА -----
 LRESULT CALLBACK MainWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_CREATE: {
@@ -247,7 +275,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             420, 10, SCREEN_WIDTH, SCREEN_HEIGHT, hWnd, NULL, NULL, NULL);
         SetWindowLongPtrW(g_hCanvas, GWLP_WNDPROC, (LONG_PTR)CanvasWndProc);
         LogToFile("Controls created.");
-        g_currentScript = LoadScript(); // LoadScript определена выше
+        g_currentScript = LoadScript();
         RunScriptAndDisplay(g_currentScript, L"Initial output");
         break;
     }
@@ -282,36 +310,6 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         return DefWindowProcW(hWnd, msg, wParam, lParam);
     }
     return 0;
-}
-
-// ----- ОБРАБОТЧИК ХОЛСТА (клавиши) -----
-LRESULT CALLBACK CanvasWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    switch (msg) {
-    case WM_KEYDOWN:
-        keyStates[(int)wParam] = true;
-        return 0;
-    case WM_KEYUP:
-        keyStates[(int)wParam] = false;
-        return 0;
-    case WM_PAINT: {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hWnd, &ps);
-        BITMAPINFO bmi = {};
-        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        bmi.bmiHeader.biWidth = SCREEN_WIDTH;
-        bmi.bmiHeader.biHeight = -SCREEN_HEIGHT;
-        bmi.bmiHeader.biPlanes = 1;
-        bmi.bmiHeader.biBitCount = 32;
-        bmi.bmiHeader.biCompression = BI_RGB;
-        SetDIBitsToDevice(hdc, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT,
-                          0, 0, 0, SCREEN_HEIGHT,
-                          screenBuffer.data(), &bmi, DIB_RGB_COLORS);
-        EndPaint(hWnd, &ps);
-        return 0;
-    }
-    default:
-        return DefWindowProc(hWnd, msg, wParam, lParam);
-    }
 }
 
 // ----- ТОЧКА ВХОДА -----
