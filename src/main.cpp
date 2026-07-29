@@ -13,6 +13,22 @@
 #include <vector>
 #include <map>
 
+// ----- ПРОТОТИПЫ ВСЕХ ФУНКЦИЙ (чтобы избежать ошибок C3861) -----
+void LogToFile(const std::string& msg);
+void draw_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b);
+void draw_rect(int x, int y, int w, int h, uint8_t r, uint8_t g, uint8_t b);
+void draw_circle(int cx, int cy, int radius, uint8_t r, uint8_t g, uint8_t b);
+void draw_text(int x, int y, const std::string& text);
+void clear_screen();
+void flip_screen();
+bool is_key_pressed(const std::string& keyName);
+std::string ReadFileContent(const std::wstring& path);
+std::wstring GetExeDir();
+std::string LoadScript();
+void RunScriptAndDisplay(const std::string& source, const std::wstring& title);
+LRESULT CALLBACK MainWndProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK CanvasWndProc(HWND, UINT, WPARAM, LPARAM);
+
 // ----- ГРАФИЧЕСКОЕ СОСТОЯНИЕ -----
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 400;
@@ -20,6 +36,12 @@ std::vector<uint32_t> screenBuffer(SCREEN_WIDTH * SCREEN_HEIGHT, 0);
 bool screenDirty = true;
 HWND g_hCanvas = NULL;
 std::map<int, bool> keyStates;
+
+// Глобальные переменные для GUI
+HWND g_hMainWnd = NULL;
+HWND g_hEditOutput = NULL;
+HWND g_hBtnRun = NULL;
+std::string g_currentScript;
 
 // ----- ГРАФИЧЕСКИЕ ФУНКЦИИ (С++) -----
 void draw_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
@@ -124,15 +146,95 @@ draw_text(200, 350, "Hello from GIG!")
 update()
 )";
 
-// Глобальные переменные
-HWND g_hMainWnd = NULL;
-HWND g_hEditOutput = NULL;
-HWND g_hBtnRun = NULL;
-std::string g_currentScript;
+// ----- ФУНКЦИИ ЗАГРУЗКИ И ВЫПОЛНЕНИЯ -----
+std::string ReadFileContent(const std::wstring& path) {
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, path.c_str(), -1, NULL, 0, NULL, NULL);
+    std::string filename(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, path.c_str(), -1, &filename[0], size_needed, NULL, NULL);
+    filename.pop_back();
+    std::ifstream file(filename);
+    if (!file.is_open()) return "";
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
+}
 
-// ----- ПРОТОТИПЫ ОБРАБОТЧИКОВ -----
-LRESULT CALLBACK MainWndProc(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK CanvasWndProc(HWND, UINT, WPARAM, LPARAM);
+std::wstring GetExeDir() {
+    wchar_t buffer[MAX_PATH];
+    GetModuleFileNameW(NULL, buffer, MAX_PATH);
+    std::wstring exePath(buffer);
+    size_t pos = exePath.find_last_of(L"\\/");
+    if (pos != std::wstring::npos) exePath = exePath.substr(0, pos+1);
+    return exePath;
+}
+
+std::string LoadScript() {
+    int argc; LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (argc >= 2) {
+        std::wstring path = argv[1]; LocalFree(argv);
+        std::string content = ReadFileContent(path);
+        if (!content.empty()) { SetWindowTextW(g_hMainWnd, L"GIG – executing file"); return content; }
+    }
+    if (argc > 0) LocalFree(argv);
+    std::wstring exeDir = GetExeDir();
+    std::wstring scriptPath = exeDir + L"test\\test.gig";
+    DWORD attr = GetFileAttributesW(scriptPath.c_str());
+    if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
+        std::string content = ReadFileContent(scriptPath);
+        if (!content.empty()) { SetWindowTextW(g_hMainWnd, L"GIG – executing test\\test.gig"); return content; }
+    }
+    SetWindowTextW(g_hMainWnd, L"GIG – executing embedded script");
+    return embeddedScript;
+}
+
+void RunScriptAndDisplay(const std::string& source, const std::wstring& title = L"Output") {
+    LogToFile("RunScriptAndDisplay called");
+    if (!g_hEditOutput) return;
+    SetWindowTextW(g_hEditOutput, L"Running...");
+    std::stringstream outputStream;
+    auto old_buf = std::cout.rdbuf(outputStream.rdbuf());
+
+    bool success = false;
+    try {
+        gig::Lexer lexer(source);
+        gig::Parser parser(lexer);
+        auto ast = parser.parse();
+        if (!ast) throw std::runtime_error("AST is null");
+        gig::Interpreter interpreter;
+        interpreter.execute(ast.get());
+        success = true;
+    } catch (const std::exception& e) {
+        std::cout.rdbuf(old_buf);
+        std::string errMsg = "Parsing error: " + std::string(e.what()) + "\n\nSwitching to safe script...";
+        SetWindowTextW(g_hEditOutput, std::wstring(errMsg.begin(), errMsg.end()).c_str());
+        static bool recursive = false;
+        if (!recursive) {
+            recursive = true;
+            g_currentScript = safeScript;
+            RunScriptAndDisplay(safeScript, L"Safe script");
+            recursive = false;
+        }
+        return;
+    } catch (...) {
+        std::cout.rdbuf(old_buf);
+        SetWindowTextW(g_hEditOutput, L"Unknown exception!");
+        static bool recursive = false;
+        if (!recursive) {
+            recursive = true;
+            g_currentScript = safeScript;
+            RunScriptAndDisplay(safeScript, L"Safe script");
+            recursive = false;
+        }
+        return;
+    }
+    std::cout.rdbuf(old_buf);
+    if (success) {
+        std::string output = outputStream.str();
+        if (output.empty()) output = "(no output)";
+        std::wstring wideOutput(output.begin(), output.end());
+        SetWindowTextW(g_hEditOutput, wideOutput.c_str());
+    }
+}
 
 // ----- ОБРАБОТЧИК ОКНА -----
 LRESULT CALLBACK MainWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -212,95 +314,6 @@ LRESULT CALLBACK CanvasWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
     default:
         return DefWindowProc(hWnd, msg, wParam, lParam);
     }
-}
-
-// ----- ВЫПОЛНЕНИЕ СКРИПТА -----
-void RunScriptAndDisplay(const std::string& source, const std::wstring& title = L"Output") {
-    LogToFile("RunScriptAndDisplay called");
-    if (!g_hEditOutput) return;
-    SetWindowTextW(g_hEditOutput, L"Running...");
-    std::stringstream outputStream;
-    auto old_buf = std::cout.rdbuf(outputStream.rdbuf());
-
-    bool success = false;
-    try {
-        gig::Lexer lexer(source);
-        gig::Parser parser(lexer);
-        auto ast = parser.parse();
-        if (!ast) throw std::runtime_error("AST is null");
-        gig::Interpreter interpreter;
-        interpreter.execute(ast.get());
-        success = true;
-    } catch (const std::exception& e) {
-        std::cout.rdbuf(old_buf);
-        std::string errMsg = "Parsing error: " + std::string(e.what()) + "\n\nSwitching to safe script...";
-        SetWindowTextW(g_hEditOutput, std::wstring(errMsg.begin(), errMsg.end()).c_str());
-        static bool recursive = false;
-        if (!recursive) {
-            recursive = true;
-            g_currentScript = safeScript;
-            RunScriptAndDisplay(safeScript, L"Safe script");
-            recursive = false;
-        }
-        return;
-    } catch (...) {
-        std::cout.rdbuf(old_buf);
-        SetWindowTextW(g_hEditOutput, L"Unknown exception!");
-        static bool recursive = false;
-        if (!recursive) {
-            recursive = true;
-            g_currentScript = safeScript;
-            RunScriptAndDisplay(safeScript, L"Safe script");
-            recursive = false;
-        }
-        return;
-    }
-    std::cout.rdbuf(old_buf);
-    if (success) {
-        std::string output = outputStream.str();
-        if (output.empty()) output = "(no output)";
-        std::wstring wideOutput(output.begin(), output.end());
-        SetWindowTextW(g_hEditOutput, wideOutput.c_str());
-    }
-}
-
-// ----- ЗАГРУЗКА СКРИПТА -----
-std::string ReadFileContent(const std::wstring& path) {
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, path.c_str(), -1, NULL, 0, NULL, NULL);
-    std::string filename(size_needed, 0);
-    WideCharToMultiByte(CP_UTF8, 0, path.c_str(), -1, &filename[0], size_needed, NULL, NULL);
-    filename.pop_back();
-    std::ifstream file(filename);
-    if (!file.is_open()) return "";
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    return buffer.str();
-}
-std::wstring GetExeDir() {
-    wchar_t buffer[MAX_PATH];
-    GetModuleFileNameW(NULL, buffer, MAX_PATH);
-    std::wstring exePath(buffer);
-    size_t pos = exePath.find_last_of(L"\\/");
-    if (pos != std::wstring::npos) exePath = exePath.substr(0, pos+1);
-    return exePath;
-}
-std::string LoadScript() {
-    int argc; LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    if (argc >= 2) {
-        std::wstring path = argv[1]; LocalFree(argv);
-        std::string content = ReadFileContent(path);
-        if (!content.empty()) { SetWindowTextW(g_hMainWnd, L"GIG – executing file"); return content; }
-    }
-    if (argc > 0) LocalFree(argv);
-    std::wstring exeDir = GetExeDir();
-    std::wstring scriptPath = exeDir + L"test\\test.gig";
-    DWORD attr = GetFileAttributesW(scriptPath.c_str());
-    if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
-        std::string content = ReadFileContent(scriptPath);
-        if (!content.empty()) { SetWindowTextW(g_hMainWnd, L"GIG – executing test\\test.gig"); return content; }
-    }
-    SetWindowTextW(g_hMainWnd, L"GIG – executing embedded script");
-    return embeddedScript;
 }
 
 // ----- ТОЧКА ВХОДА -----
