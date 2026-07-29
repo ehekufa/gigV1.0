@@ -1,5 +1,5 @@
 print("Hello from test.gig!")
-print("This script uses only supported features.")
+print("ccccccc")
 
 function fact(n)
     if n == 0 then return 1 end
