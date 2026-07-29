@@ -1,24 +1,24 @@
-print("GIG Game Demo")
-print("Drawing colorful shapes and checking keys.")
+print("GIG Animation Demo")
+print("Moving square on white background.")
 
 clear()
-draw_rect(50, 50, 150, 100, 255, 0, 0)
-draw_circle(300, 200, 80, 0, 255, 0)
+
+-- Рисуем статичные фигуры
+draw_rect(50, 50, 150, 100, 255, 0, 0)   -- красный
+draw_circle(300, 200, 80, 0, 255, 0)     -- зелёный круг
 draw_text(50, 300, "Press SPACE to exit")
 
--- Простая анимация (движущийся жёлтый квадрат)
+-- Движущийся жёлтый квадрат
 local x = 0
 while x < 500 do
-    -- Рисуем квадрат, предварительно очистив экран? 
-    -- В этом примере мы перерисовываем всё каждый кадр, чтобы не оставлять следов.
+    -- Перерисовываем всё заново, чтобы квадрат не оставлял следов
     clear()
     draw_rect(50, 50, 150, 100, 255, 0, 0)
     draw_circle(300, 200, 80, 0, 255, 0)
     draw_text(50, 300, "Press SPACE to exit")
-    draw_rect(x, 350, 30, 30, 255, 255, 0)
+    draw_rect(x, 350, 30, 30, 255, 255, 0)  -- жёлтый квадрат
     update()
 
-    -- Проверка клавиши (выход по пробелу)
     if key_pressed("space") then
         print("Space pressed, exiting loop.")
         break
