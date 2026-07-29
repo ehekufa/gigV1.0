@@ -10,7 +10,7 @@
 #include <string>
 #include <ctime>
 
-// ----- ЛОГГИРОВАНИЕ -----
+// ----- ЛОГГИРОВАНИЕ (для отладки) -----
 void LogToFile(const std::string& msg) {
     std::ofstream log("debug.log", std::ios::app);
     if (log.is_open()) {
@@ -19,10 +19,11 @@ void LogToFile(const std::string& msg) {
     }
 }
 
-// ----- ПРОСТОЙ РАБОЧИЙ СКРИПТ (без таблиц и сложных вызовов) -----
+// ----- БЕЗОПАСНЫЙ СКРИПТ (без таблиц, без сложных вызовов) -----
 const char* safeScript = R"(
 print("Hello from GIG!")
-print("This script is safe and should run without errors.")
+print("This is the SAFE fallback script.")
+print("Your test.gig had parsing errors, so this script runs instead.")
 
 function fact(n)
     if n == 0 then return 1 end
@@ -32,14 +33,13 @@ end
 local result = fact(5)
 print("fact(5) =", result)
 
-print("Script finished.")
+print("Script finished successfully.")
 )";
 
-// ----- ВСТРОЕННЫЙ РАСШИРЕННЫЙ СКРИПТ (может падать из-за таблиц) -----
+// ----- ВСТРОЕННЫЙ СКРИПТ (используется, если test.gig не найден) -----
 const char* embeddedScript = R"(
 print("Hello from GIG!")
-print("This is the embedded fallback script.")
-print("To use your own script, place test/test.gig next to this executable.")
+print("No test.gig found, running embedded script.")
 
 function fact(n)
     if n == 0 then return 1 end
@@ -49,23 +49,7 @@ end
 local result = fact(5)
 print("fact(5) =", result)
 
--- Таблицы могут вызывать ошибку парсинга
-local t = { a = 1, b = 2, c = 3 }
-print("type(t) =", type(t))
-
-function div(a, b)
-    if b == 0 then return nil, "division by zero" end
-    return a / b
-end
-
-local ok, res = pcall(div, 10, 2)
-if ok then
-    print("10 / 2 =", res)
-else
-    print("Error:", res)
-end
-
-print("Script finished.")
+print("Embedded script finished.")
 )";
 
 // Глобальные переменные
@@ -74,7 +58,7 @@ HWND g_hEditOutput = NULL;
 HWND g_hBtnRun = NULL;
 std::string g_currentScript;
 
-// ----- Выполнить скрипт и вывести результат в поле -----
+// ----- Выполнить скрипт и вывести результат (с автоматическим переходом на safeScript при ошибке) -----
 void RunScriptAndDisplay(const std::string& source, const std::wstring& title = L"Output") {
     LogToFile("RunScriptAndDisplay called, source length: " + std::to_string(source.size()));
 
@@ -83,13 +67,12 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title = 
         return;
     }
 
-    // Очищаем поле
     SetWindowTextW(g_hEditOutput, L"Running...");
 
-    // Перенаправляем stdout
     std::stringstream outputStream;
     auto old_buf = std::cout.rdbuf(outputStream.rdbuf());
 
+    bool success = false;
     try {
         LogToFile("Creating Lexer...");
         gig::Lexer lexer(source);
@@ -100,9 +83,7 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title = 
 
         if (!ast) {
             LogToFile("Parsing failed (ast is null).");
-            std::cout.rdbuf(old_buf);
-            SetWindowTextW(g_hEditOutput, L"Parsing failed (ast is null).");
-            return;
+            throw std::runtime_error("AST is null");
         }
 
         LogToFile("Creating Interpreter...");
@@ -110,28 +91,56 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title = 
         LogToFile("Executing...");
         interpreter.execute(ast.get());
         LogToFile("Execution finished.");
+        success = true;
     } catch (const std::exception& e) {
         LogToFile("Exception: " + std::string(e.what()));
         std::cout.rdbuf(old_buf);
-        std::string errMsg = "Exception: " + std::string(e.what());
+        // Показываем сообщение об ошибке
+        std::string errMsg = "Parsing error: " + std::string(e.what()) + "\n\nSwitching to safe script...";
         SetWindowTextW(g_hEditOutput, std::wstring(errMsg.begin(), errMsg.end()).c_str());
+        // Заменяем текущий скрипт на безопасный и выполняем его
+        g_currentScript = safeScript;
+        // Рекурсивно вызываем себя с безопасным скриптом (чтобы он выполнился и показал вывод)
+        // Чтобы избежать бесконечной рекурсии, передаём флаг, но проще сделать так:
+        // Мы уже установили g_currentScript = safeScript, и дальше выполним его.
+        // Но чтобы не зациклиться, используем отдельную функцию.
+        // Вместо рекурсии просто выполняем безопасный скрипт напрямую.
+        // Но нам нужно сбросить буфер вывода.
+        // Проще: заново запустить RunScriptAndDisplay с safeScript, но без рекурсии.
+        // Для этого используем флаг.
+        static bool recursive = false;
+        if (!recursive) {
+            recursive = true;
+            RunScriptAndDisplay(safeScript, L"Safe script (fallback)");
+            recursive = false;
+        }
         return;
     } catch (...) {
         LogToFile("Unknown exception!");
         std::cout.rdbuf(old_buf);
-        SetWindowTextW(g_hEditOutput, L"Unknown exception!");
+        SetWindowTextW(g_hEditOutput, L"Unknown exception! Switching to safe script.");
+        g_currentScript = safeScript;
+        static bool recursive = false;
+        if (!recursive) {
+            recursive = true;
+            RunScriptAndDisplay(safeScript, L"Safe script (fallback)");
+            recursive = false;
+        }
         return;
     }
 
     std::cout.rdbuf(old_buf);
 
-    std::string output = outputStream.str();
-    if (output.empty()) output = "(no output)";
-
-    LogToFile("Output length: " + std::to_string(output.size()));
-
-    std::wstring wideOutput(output.begin(), output.end());
-    SetWindowTextW(g_hEditOutput, wideOutput.c_str());
+    if (success) {
+        std::string output = outputStream.str();
+        if (output.empty()) output = "(no output)";
+        LogToFile("Output length: " + std::to_string(output.size()));
+        std::wstring wideOutput(output.begin(), output.end());
+        SetWindowTextW(g_hEditOutput, wideOutput.c_str());
+    } else {
+        // Если success == false, но исключение не было брошено (маловероятно)
+        SetWindowTextW(g_hEditOutput, L"Unknown error occurred.");
+    }
 
     LogToFile("Display complete.");
 }
@@ -194,10 +203,9 @@ std::string LoadScript() {
         }
     }
 
-    // Используем безопасный скрипт (без таблиц)
-    LogToFile("Using safe script (no tables).");
-    SetWindowTextW(g_hMainWnd, L"GIG – executing safe script");
-    return safeScript;
+    LogToFile("Using embedded script.");
+    SetWindowTextW(g_hMainWnd, L"GIG – executing embedded script");
+    return embeddedScript;
 }
 
 // ----- Обработчик сообщений -----
