@@ -13,22 +13,6 @@
 #include <vector>
 #include <map>
 
-// ----- ПРОТОТИПЫ ВСЕХ ФУНКЦИЙ (чтобы избежать ошибок C3861) -----
-void LogToFile(const std::string& msg);
-void draw_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b);
-void draw_rect(int x, int y, int w, int h, uint8_t r, uint8_t g, uint8_t b);
-void draw_circle(int cx, int cy, int radius, uint8_t r, uint8_t g, uint8_t b);
-void draw_text(int x, int y, const std::string& text);
-void clear_screen();
-void flip_screen();
-bool is_key_pressed(const std::string& keyName);
-std::string ReadFileContent(const std::wstring& path);
-std::wstring GetExeDir();
-std::string LoadScript();
-void RunScriptAndDisplay(const std::string& source, const std::wstring& title);
-LRESULT CALLBACK MainWndProc(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK CanvasWndProc(HWND, UINT, WPARAM, LPARAM);
-
 // ----- ГРАФИЧЕСКОЕ СОСТОЯНИЕ -----
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 400;
@@ -37,11 +21,18 @@ bool screenDirty = true;
 HWND g_hCanvas = NULL;
 std::map<int, bool> keyStates;
 
-// Глобальные переменные для GUI
+// Глобальные переменные
 HWND g_hMainWnd = NULL;
 HWND g_hEditOutput = NULL;
 HWND g_hBtnRun = NULL;
 std::string g_currentScript;
+
+// ----- ПРОТОТИПЫ ФУНКЦИЙ (чтобы компилятор знал о них) -----
+void LogToFile(const std::string& msg);
+std::string ReadFileContent(const std::wstring& path);
+std::wstring GetExeDir();
+std::string LoadScript();
+void RunScriptAndDisplay(const std::string& source, const std::wstring& title);
 
 // ----- ГРАФИЧЕСКИЕ ФУНКЦИИ (С++) -----
 void draw_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
@@ -146,7 +137,7 @@ draw_text(200, 350, "Hello from GIG!")
 update()
 )";
 
-// ----- ФУНКЦИИ ЗАГРУЗКИ И ВЫПОЛНЕНИЯ -----
+// ----- ЧТЕНИЕ ФАЙЛА -----
 std::string ReadFileContent(const std::wstring& path) {
     int size_needed = WideCharToMultiByte(CP_UTF8, 0, path.c_str(), -1, NULL, 0, NULL, NULL);
     std::string filename(size_needed, 0);
@@ -159,6 +150,7 @@ std::string ReadFileContent(const std::wstring& path) {
     return buffer.str();
 }
 
+// ----- ПУТЬ К EXE -----
 std::wstring GetExeDir() {
     wchar_t buffer[MAX_PATH];
     GetModuleFileNameW(NULL, buffer, MAX_PATH);
@@ -168,6 +160,7 @@ std::wstring GetExeDir() {
     return exePath;
 }
 
+// ----- ЗАГРУЗКА СКРИПТА -----
 std::string LoadScript() {
     int argc; LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (argc >= 2) {
@@ -187,6 +180,7 @@ std::string LoadScript() {
     return embeddedScript;
 }
 
+// ----- ВЫПОЛНЕНИЕ СКРИПТА -----
 void RunScriptAndDisplay(const std::string& source, const std::wstring& title = L"Output") {
     LogToFile("RunScriptAndDisplay called");
     if (!g_hEditOutput) return;
@@ -236,6 +230,10 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title = 
     }
 }
 
+// ----- ПРОТОТИПЫ ОБРАБОТЧИКОВ ОКОН (уже объявлены) -----
+LRESULT CALLBACK MainWndProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK CanvasWndProc(HWND, UINT, WPARAM, LPARAM);
+
 // ----- ОБРАБОТЧИК ОКНА -----
 LRESULT CALLBACK MainWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -249,7 +247,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             420, 10, SCREEN_WIDTH, SCREEN_HEIGHT, hWnd, NULL, NULL, NULL);
         SetWindowLongPtrW(g_hCanvas, GWLP_WNDPROC, (LONG_PTR)CanvasWndProc);
         LogToFile("Controls created.");
-        g_currentScript = LoadScript();
+        g_currentScript = LoadScript(); // LoadScript определена выше
         RunScriptAndDisplay(g_currentScript, L"Initial output");
         break;
     }
