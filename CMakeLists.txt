@@ -9,8 +9,7 @@ include_directories(include/gig)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
-# WIN32 – приложение без консоли
 add_executable(gig WIN32 ${SOURCES})
 
-# Подключаем библиотеки для GUI и Windows API
+# Для Windows API + GDI (графика)
 target_link_libraries(gig shell32 user32 gdi32 comctl32)
