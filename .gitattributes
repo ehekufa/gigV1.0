@@ -1,1 +1,2 @@
-*.mylang linguist-language=gig
+*.gig linguist-detectable=false
+*.mylang linguist-language=Clean
