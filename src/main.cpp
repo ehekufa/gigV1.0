@@ -129,6 +129,8 @@ void LogToFile(const std::string& msg) {
 
 // ----- БЕЗОПАСНЫЙ СКРИПТ (если test.gig не найден или с ошибкой) -----
 const char* safeScript = R"(
+print("Safe script running")
+print("No test.gig found or parsing error")
 clear()
 draw_rect(100, 100, 200, 150, 255, 0, 0)
 draw_circle(400, 200, 80, 0, 0, 255)
@@ -223,7 +225,6 @@ std::string LoadScript() {
         }
     }
     
-    // Если test.gig не найден – показываем сообщение и безопасный скрипт
     SetWindowTextW(g_hMainWnd, L"GIG – no test.gig");
     return std::string(safeScript);
 }
@@ -232,8 +233,10 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title) {
     LogToFile("RunScript called, len=" + std::to_string(source.size()));
     if (!g_hEditOutput) return;
     SetWindowTextW(g_hEditOutput, L"Running...");
+    
+    // Перенаправляем stdout в строку
     std::stringstream outputStream;
-    auto old_buf = std::cout.rdbuf(outputStream.rdbuf());
+    std::streambuf* old_buf = std::cout.rdbuf(outputStream.rdbuf());
 
     bool success = false;
     try {
@@ -245,6 +248,7 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title) {
         interpreter.execute(ast.get());
         success = true;
     } catch (const std::exception& e) {
+        // Восстанавливаем cout перед выводом
         std::cout.rdbuf(old_buf);
         std::string err = "Parsing error: " + std::string(e.what()) + "\nSwitching to safe...";
         SetWindowTextW(g_hEditOutput, std::wstring(err.begin(), err.end()).c_str());
@@ -268,7 +272,10 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title) {
         }
         return;
     }
+    
+    // Восстанавливаем stdout
     std::cout.rdbuf(old_buf);
+    
     if (success) {
         std::string out = outputStream.str();
         if (out.empty()) out = "(no output)";
