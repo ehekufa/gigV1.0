@@ -51,7 +51,6 @@ Value type_func(Environment&, const std::vector<Value>& args) {
 
 // ----- pcall – ЗАЩИЩЁННЫЙ ВЫЗОВ (как в Lua) -----
 Value pcall_func(Environment& env, const std::vector<Value>& args) {
-    // Проверяем аргументы
     if (args.empty()) {
         std::cout << "pcall: expected function as first argument" << std::endl;
         return Value();
@@ -65,59 +64,52 @@ Value pcall_func(Environment& env, const std::vector<Value>& args) {
 
     FunctionObj* func = func_val.as_function();
     if (!func || !func->body) {
-        // Если тело отсутствует – возвращаем ошибку
         auto err = new StringObj("function has no body");
         return Value(err);
     }
 
-    // Пытаемся выполнить функцию в защищённом режиме
     try {
         Environment call_env(&env);
 
-        // Передаём аргументы (начиная со второго) параметрам функции
         size_t param_count = func->params.size();
-        size_t arg_count = args.size() - 1; // первый аргумент – сама функция
+        size_t arg_count = args.size() - 1;
 
         for (size_t i = 0; i < param_count; ++i) {
             if (i < arg_count) {
                 call_env.set(func->params[i], args[i + 1]);
             } else {
-                call_env.set(func->params[i], Value()); // nil для недостающих
+                call_env.set(func->params[i], Value());
             }
         }
 
-        // Выполняем тело функции
         call_env.returned = false;
         Value result = func->body->execute(call_env);
 
-        // Возвращаем: [true, результат] – как в Lua
-        Value success(true);
+        // Явно приводим к bool
+        Value success = Value(true);
         Value res = (call_env.returned) ? result : Value();
 
-        // Создаём таблицу с двумя полями
         TableObj* t = new TableObj();
-        t->set(Value(1), success);   // индекс 1 – статус
-        t->set(Value(2), res);       // индекс 2 – результат
+        t->set(Value(1.0), success);   // используем double
+        t->set(Value(2.0), res);
         return Value(t);
 
     } catch (const std::exception& e) {
-        // Ошибка – возвращаем [false, сообщение]
-        Value success(false);
+        Value success = Value(false);
         auto msg = new StringObj(e.what());
 
         TableObj* t = new TableObj();
-        t->set(Value(1), success);
-        t->set(Value(2), Value(msg));
+        t->set(Value(1.0), success);
+        t->set(Value(2.0), Value(msg));
         return Value(t);
 
     } catch (...) {
-        // Неизвестная ошибка
-        Value success(false);
+        Value success = Value(false);
         auto msg = new StringObj("unknown error");
 
         TableObj* t = new TableObj();
-        t->set(Value(1), success);
-        t->set(Value(2), Value(msg));
+        t->set(Value(1.0), success);
+        t->set(Value(2.0), Value(msg));
         return Value(t);
     }
 }
@@ -136,7 +128,7 @@ void registerBuiltins(Environment* env) {
     env->set("print", Value(new CFunctionObj(print_func)));
     env->set("collectgarbage", Value(new CFunctionObj(collectgarbage_func)));
     env->set("type", Value(new CFunctionObj(type_func)));
-    env->set("pcall", Value(new CFunctionObj(pcall_func))); // <-- теперь работает!
+    env->set("pcall", Value(new CFunctionObj(pcall_func)));
 
     // Графика
     env->set("draw_pixel", Value(new CFunctionObj(draw_pixel_func)));
