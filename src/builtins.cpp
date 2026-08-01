@@ -49,27 +49,80 @@ Value type_func(Environment&, const std::vector<Value>& args) {
     return Value(s);
 }
 
+// ----- pcall – ЗАЩИЩЁННЫЙ ВЫЗОВ (как в Lua) -----
 Value pcall_func(Environment& env, const std::vector<Value>& args) {
-    if (args.empty()) return Value();
-    const Value& func_val = args[0];
-    if (func_val.type != Type::FUNCTION) return Value();
-    FunctionObj* func = func_val.as_function();
-    if (!func || !func->body) return Value();
-
-    Environment call_env(&env);
-    size_t param_count = func->params.size();
-    size_t arg_count = args.size() - 1;
-    for (size_t i = 0; i < param_count; ++i) {
-        if (i < arg_count) call_env.set(func->params[i], args[i+1]);
-        else call_env.set(func->params[i], Value());
+    // Проверяем аргументы
+    if (args.empty()) {
+        std::cout << "pcall: expected function as first argument" << std::endl;
+        return Value();
     }
-    call_env.returned = false;
-    Value result = func->body->execute(call_env);
-    if (call_env.returned) return result;
-    return Value();
+
+    const Value& func_val = args[0];
+    if (func_val.type != Type::FUNCTION) {
+        std::cout << "pcall: first argument must be a function" << std::endl;
+        return Value();
+    }
+
+    FunctionObj* func = func_val.as_function();
+    if (!func || !func->body) {
+        // Если тело отсутствует – возвращаем ошибку
+        auto err = new StringObj("function has no body");
+        return Value(err);
+    }
+
+    // Пытаемся выполнить функцию в защищённом режиме
+    try {
+        Environment call_env(&env);
+
+        // Передаём аргументы (начиная со второго) параметрам функции
+        size_t param_count = func->params.size();
+        size_t arg_count = args.size() - 1; // первый аргумент – сама функция
+
+        for (size_t i = 0; i < param_count; ++i) {
+            if (i < arg_count) {
+                call_env.set(func->params[i], args[i + 1]);
+            } else {
+                call_env.set(func->params[i], Value()); // nil для недостающих
+            }
+        }
+
+        // Выполняем тело функции
+        call_env.returned = false;
+        Value result = func->body->execute(call_env);
+
+        // Возвращаем: [true, результат] – как в Lua
+        Value success(true);
+        Value res = (call_env.returned) ? result : Value();
+
+        // Создаём таблицу с двумя полями
+        TableObj* t = new TableObj();
+        t->set(Value(1), success);   // индекс 1 – статус
+        t->set(Value(2), res);       // индекс 2 – результат
+        return Value(t);
+
+    } catch (const std::exception& e) {
+        // Ошибка – возвращаем [false, сообщение]
+        Value success(false);
+        auto msg = new StringObj(e.what());
+
+        TableObj* t = new TableObj();
+        t->set(Value(1), success);
+        t->set(Value(2), Value(msg));
+        return Value(t);
+
+    } catch (...) {
+        // Неизвестная ошибка
+        Value success(false);
+        auto msg = new StringObj("unknown error");
+
+        TableObj* t = new TableObj();
+        t->set(Value(1), success);
+        t->set(Value(2), Value(msg));
+        return Value(t);
+    }
 }
 
-// ----- Графические функции объявлены как extern (определены в main.cpp) -----
+// ----- Графические функции (extern – определены в main.cpp) -----
 extern Value draw_pixel_func(Environment&, const std::vector<Value>&);
 extern Value draw_rect_func(Environment&, const std::vector<Value>&);
 extern Value draw_circle_func(Environment&, const std::vector<Value>&);
@@ -78,11 +131,12 @@ extern Value clear_func(Environment&, const std::vector<Value>&);
 extern Value update_func(Environment&, const std::vector<Value>&);
 extern Value key_pressed_func(Environment&, const std::vector<Value>&);
 
+// ----- РЕГИСТРАЦИЯ ВСЕХ ВСТРОЕННЫХ ФУНКЦИЙ -----
 void registerBuiltins(Environment* env) {
     env->set("print", Value(new CFunctionObj(print_func)));
     env->set("collectgarbage", Value(new CFunctionObj(collectgarbage_func)));
     env->set("type", Value(new CFunctionObj(type_func)));
-    env->set("pcall", Value(new CFunctionObj(pcall_func)));
+    env->set("pcall", Value(new CFunctionObj(pcall_func))); // <-- теперь работает!
 
     // Графика
     env->set("draw_pixel", Value(new CFunctionObj(draw_pixel_func)));
