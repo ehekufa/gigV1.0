@@ -45,13 +45,12 @@ void draw_circle(int cx, int cy, int radius, uint8_t r, uint8_t g, uint8_t b) {
 void draw_text(int x, int y, const std::string& text) {
     HDC hdc = GetDC(g_hCanvas);
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, RGB(0, 0, 0)); // ЧЁРНЫЙ ТЕКСТ
+    SetTextColor(hdc, RGB(0, 0, 0));
     TextOutA(hdc, x, y, text.c_str(), (int)text.size());
     ReleaseDC(g_hCanvas, hdc);
 }
 
 void clear_screen() {
-    // БЕЛЫЙ ФОН (0xFFFFFFFF)
     std::fill(screenBuffer.begin(), screenBuffer.end(), 0xFFFFFFFF);
     screenDirty = true;
 }
@@ -81,16 +80,34 @@ bool is_key_pressed(const std::string& keyName) {
 // ----- ВСТРОЕННЫЕ ФУНКЦИИ GIG (обёртки) -----
 namespace gig {
     Value draw_pixel_func(Environment&, const std::vector<Value>& args) {
-        if (args.size()<5) return Value(); int x=(int)args[0].number; int y=(int)args[1].number; int r=(int)args[2].number; int g=(int)args[3].number; int b=(int)args[4].number; draw_pixel(x,y,(uint8_t)r,(uint8_t)g,(uint8_t)b); return Value();
+        if (args.size()<5) return Value();
+        int x=(int)args[0].number; int y=(int)args[1].number;
+        int r=(int)args[2].number; int g=(int)args[3].number; int b=(int)args[4].number;
+        draw_pixel(x,y,(uint8_t)r,(uint8_t)g,(uint8_t)b);
+        return Value();
     }
     Value draw_rect_func(Environment&, const std::vector<Value>& args) {
-        if (args.size()<7) return Value(); int x=(int)args[0].number; int y=(int)args[1].number; int w=(int)args[2].number; int h=(int)args[3].number; int r=(int)args[4].number; int g=(int)args[5].number; int b=(int)args[6].number; draw_rect(x,y,w,h,(uint8_t)r,(uint8_t)g,(uint8_t)b); return Value();
+        if (args.size()<7) return Value();
+        int x=(int)args[0].number; int y=(int)args[1].number;
+        int w=(int)args[2].number; int h=(int)args[3].number;
+        int r=(int)args[4].number; int g=(int)args[5].number; int b=(int)args[6].number;
+        draw_rect(x,y,w,h,(uint8_t)r,(uint8_t)g,(uint8_t)b);
+        return Value();
     }
     Value draw_circle_func(Environment&, const std::vector<Value>& args) {
-        if (args.size()<6) return Value(); int cx=(int)args[0].number; int cy=(int)args[1].number; int radius=(int)args[2].number; int r=(int)args[3].number; int g=(int)args[4].number; int b=(int)args[5].number; draw_circle(cx,cy,radius,(uint8_t)r,(uint8_t)g,(uint8_t)b); return Value();
+        if (args.size()<6) return Value();
+        int cx=(int)args[0].number; int cy=(int)args[1].number;
+        int radius=(int)args[2].number;
+        int r=(int)args[3].number; int g=(int)args[4].number; int b=(int)args[5].number;
+        draw_circle(cx,cy,radius,(uint8_t)r,(uint8_t)g,(uint8_t)b);
+        return Value();
     }
     Value draw_text_func(Environment&, const std::vector<Value>& args) {
-        if (args.size()<3) return Value(); int x=(int)args[0].number; int y=(int)args[1].number; auto s=args[2].as_string(); if(!s) return Value(); draw_text(x,y,s->data); return Value();
+        if (args.size()<3) return Value();
+        int x=(int)args[0].number; int y=(int)args[1].number;
+        auto s=args[2].as_string(); if(!s) return Value();
+        draw_text(x,y,s->data);
+        return Value();
     }
     Value clear_func(Environment&, const std::vector<Value>&) { clear_screen(); return Value(); }
     Value update_func(Environment&, const std::vector<Value>&) { flip_screen(); return Value(); }
@@ -110,24 +127,12 @@ void LogToFile(const std::string& msg) {
     }
 }
 
-// ----- БЕЗОПАСНЫЙ СКРИПТ (с графикой) -----
+// ----- БЕЗОПАСНЫЙ СКРИПТ (если test.gig не найден или с ошибкой) -----
 const char* safeScript = R"(
-print("GIG Game Demo")
-print("Drawing shapes on white background.")
 clear()
 draw_rect(100, 100, 200, 150, 255, 0, 0)
 draw_circle(400, 200, 80, 0, 0, 255)
-draw_text(50, 50, "Press SPACE to exit")
-update()
-)";
-
-// ----- ВСТРОЕННЫЙ СКРИПТ -----
-const char* embeddedScript = R"(
-print("No test.gig found, running embedded script.")
-clear()
-draw_rect(10, 10, 100, 100, 255, 255, 0)
-draw_circle(300, 200, 100, 0, 255, 0)
-draw_text(200, 350, "Hello from GIG!")
+draw_text(50, 50, "No test.gig found")
 update()
 )";
 
@@ -141,6 +146,7 @@ std::string g_currentScript;
 std::string ReadFileContent(const std::wstring& path);
 std::string LoadScript();
 void RunScriptAndDisplay(const std::string& source, const std::wstring& title);
+LRESULT CALLBACK CanvasWndProc(HWND, UINT, WPARAM, LPARAM);
 
 // ----- ОБРАБОТЧИК ХОЛСТА (клавиши) -----
 LRESULT CALLBACK CanvasWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -199,22 +205,31 @@ std::string LoadScript() {
     if (argc >= 2) {
         std::wstring path = argv[1]; LocalFree(argv);
         std::string content = ReadFileContent(path);
-        if (!content.empty()) { SetWindowTextW(g_hMainWnd, L"GIG – executing file"); return content; }
+        if (!content.empty()) {
+            SetWindowTextW(g_hMainWnd, L"GIG – file");
+            return content;
+        }
     }
     if (argc > 0) LocalFree(argv);
+    
     std::wstring exeDir = GetExeDir();
     std::wstring scriptPath = exeDir + L"test\\test.gig";
     DWORD attr = GetFileAttributesW(scriptPath.c_str());
     if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
         std::string content = ReadFileContent(scriptPath);
-        if (!content.empty()) { SetWindowTextW(g_hMainWnd, L"GIG – executing test\\test.gig"); return content; }
+        if (!content.empty()) {
+            SetWindowTextW(g_hMainWnd, L"GIG – test\\test.gig");
+            return content;
+        }
     }
-    SetWindowTextW(g_hMainWnd, L"GIG – executing embedded script");
-    return std::string(embeddedScript);
+    
+    // Если test.gig не найден – показываем сообщение и безопасный скрипт
+    SetWindowTextW(g_hMainWnd, L"GIG – no test.gig");
+    return std::string(safeScript);
 }
 
 void RunScriptAndDisplay(const std::string& source, const std::wstring& title) {
-    LogToFile("RunScriptAndDisplay called");
+    LogToFile("RunScript called, len=" + std::to_string(source.size()));
     if (!g_hEditOutput) return;
     SetWindowTextW(g_hEditOutput, L"Running...");
     std::stringstream outputStream;
@@ -231,13 +246,13 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title) {
         success = true;
     } catch (const std::exception& e) {
         std::cout.rdbuf(old_buf);
-        std::string errMsg = "Parsing error: " + std::string(e.what()) + "\n\nSwitching to safe script...";
-        SetWindowTextW(g_hEditOutput, std::wstring(errMsg.begin(), errMsg.end()).c_str());
+        std::string err = "Parsing error: " + std::string(e.what()) + "\nSwitching to safe...";
+        SetWindowTextW(g_hEditOutput, std::wstring(err.begin(), err.end()).c_str());
         static bool recursive = false;
         if (!recursive) {
             recursive = true;
             g_currentScript = safeScript;
-            RunScriptAndDisplay(safeScript, L"Safe script");
+            RunScriptAndDisplay(safeScript, L"Safe");
             recursive = false;
         }
         return;
@@ -248,41 +263,44 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title) {
         if (!recursive) {
             recursive = true;
             g_currentScript = safeScript;
-            RunScriptAndDisplay(safeScript, L"Safe script");
+            RunScriptAndDisplay(safeScript, L"Safe");
             recursive = false;
         }
         return;
     }
     std::cout.rdbuf(old_buf);
     if (success) {
-        std::string output = outputStream.str();
-        if (output.empty()) output = "(no output)";
-        std::wstring wideOutput(output.begin(), output.end());
-        SetWindowTextW(g_hEditOutput, wideOutput.c_str());
+        std::string out = outputStream.str();
+        if (out.empty()) out = "(no output)";
+        std::wstring wout(out.begin(), out.end());
+        SetWindowTextW(g_hEditOutput, wout.c_str());
     }
+    LogToFile("RunScript finished");
 }
 
 // ----- ОБРАБОТЧИК ГЛАВНОГО ОКНА -----
 LRESULT CALLBACK MainWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_CREATE: {
-        LogToFile("WM_CREATE started.");
-        g_hEditOutput = CreateWindowW(L"EDIT", L"", WS_VISIBLE | WS_CHILD | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
+        LogToFile("WM_CREATE");
+        g_hEditOutput = CreateWindowW(L"EDIT", L"",
+            WS_VISIBLE | WS_CHILD | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
             10, 10, 400, 180, hWnd, NULL, NULL, NULL);
-        g_hBtnRun = CreateWindowW(L"BUTTON", L"Run Script", WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+        g_hBtnRun = CreateWindowW(L"BUTTON", L"Run Script",
+            WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
             10, 200, 100, 30, hWnd, (HMENU)1, NULL, NULL);
-        g_hCanvas = CreateWindowW(L"STATIC", L"", WS_VISIBLE | WS_CHILD | SS_OWNERDRAW,
+        g_hCanvas = CreateWindowW(L"STATIC", L"",
+            WS_VISIBLE | WS_CHILD | SS_OWNERDRAW,
             420, 10, SCREEN_WIDTH, SCREEN_HEIGHT, hWnd, NULL, NULL, NULL);
         SetWindowLongPtrW(g_hCanvas, GWLP_WNDPROC, (LONG_PTR)CanvasWndProc);
-        LogToFile("Controls created.");
         g_currentScript = LoadScript();
-        RunScriptAndDisplay(g_currentScript, L"Initial output");
+        RunScriptAndDisplay(g_currentScript, L"Initial");
         break;
     }
     case WM_COMMAND:
         if (LOWORD(wParam) == 1) {
             g_currentScript = LoadScript();
-            RunScriptAndDisplay(g_currentScript, L"Run pressed");
+            RunScriptAndDisplay(g_currentScript, L"Run");
         }
         break;
     case WM_DROPFILES: {
@@ -295,11 +313,11 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             std::string content = ReadFileContent(filePath);
             if (!content.empty()) {
                 g_currentScript = content;
-                SetWindowTextW(g_hMainWnd, L"GIG – executing dropped file");
-                RunScriptAndDisplay(g_currentScript, L"Dropped file");
+                SetWindowTextW(g_hMainWnd, L"GIG – dropped");
+                RunScriptAndDisplay(g_currentScript, L"Dropped");
             }
         } else {
-            MessageBoxW(hWnd, L"Please drop a .gig file.", L"Warning", MB_OK);
+            MessageBoxW(hWnd, L"Drop .gig file", L"Warning", MB_OK);
         }
         break;
     }
