@@ -127,7 +127,7 @@ void LogToFile(const std::string& msg) {
     }
 }
 
-// ----- БЕЗОПАСНЫЙ СКРИПТ (если test.gig не найден или с ошибкой) -----
+// ----- БЕЗОПАСНЫЙ СКРИПТ (с выводом) -----
 const char* safeScript = R"(
 print("Safe script running")
 print("No test.gig found or parsing error")
@@ -216,13 +216,18 @@ std::string LoadScript() {
     
     std::wstring exeDir = GetExeDir();
     std::wstring scriptPath = exeDir + L"test\\test.gig";
+    LogToFile("Looking for: " + std::string(scriptPath.begin(), scriptPath.end()));
+    
     DWORD attr = GetFileAttributesW(scriptPath.c_str());
     if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
+        LogToFile("Found test.gig!");
         std::string content = ReadFileContent(scriptPath);
         if (!content.empty()) {
             SetWindowTextW(g_hMainWnd, L"GIG – test\\test.gig");
             return content;
         }
+    } else {
+        LogToFile("test.gig NOT found!");
     }
     
     SetWindowTextW(g_hMainWnd, L"GIG – no test.gig");
@@ -234,7 +239,6 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title) {
     if (!g_hEditOutput) return;
     SetWindowTextW(g_hEditOutput, L"Running...");
     
-    // Перенаправляем stdout в строку
     std::stringstream outputStream;
     std::streambuf* old_buf = std::cout.rdbuf(outputStream.rdbuf());
 
@@ -248,7 +252,6 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title) {
         interpreter.execute(ast.get());
         success = true;
     } catch (const std::exception& e) {
-        // Восстанавливаем cout перед выводом
         std::cout.rdbuf(old_buf);
         std::string err = "Parsing error: " + std::string(e.what()) + "\nSwitching to safe...";
         SetWindowTextW(g_hEditOutput, std::wstring(err.begin(), err.end()).c_str());
@@ -273,7 +276,6 @@ void RunScriptAndDisplay(const std::string& source, const std::wstring& title) {
         return;
     }
     
-    // Восстанавливаем stdout
     std::cout.rdbuf(old_buf);
     
     if (success) {
