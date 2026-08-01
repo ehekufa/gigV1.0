@@ -1,30 +1,27 @@
-print("GIG Animation Demo")
-print("Moving square on white background.")
+print("=== pcall test ===")
 
-clear()
-
--- Рисуем статичные фигуры
-draw_rect(50, 50, 150, 100, 255, 0, 0)   -- красный
-draw_circle(300, 200, 80, 0, 255, 0)     -- зелёный круг
-draw_text(50, 300, "Press SPACE to exit")
-
--- Движущийся жёлтый квадрат
-local x = 0
-while x < 500 do
-    -- Перерисовываем всё заново, чтобы квадрат не оставлял следов
-    clear()
-    draw_rect(50, 50, 150, 100, 255, 0, 0)
-    draw_circle(300, 200, 80, 0, 255, 0)
-    draw_text(50, 300, "Press SPACE to exit")
-    draw_rect(x, 350, 30, 30, 255, 255, 0)  -- жёлтый квадрат
-    update()
-
-    if key_pressed("space") then
-        print("Space pressed, exiting loop.")
-        break
+-- Функция, которая может выбросить ошибку
+function divide(a, b)
+    if b == 0 then
+        error("division by zero!")   -- выбросить ошибку
     end
-
-    x = x + 5
+    return a / b
 end
 
-print("Script finished.")
+-- Успешный вызов
+local ok, result = pcall(divide, 10, 2)
+if ok then
+    print("10 / 2 =", result)
+else
+    print("Error:", result)
+end
+
+-- Вызов с ошибкой
+local ok2, err = pcall(divide, 10, 0)
+if ok2 then
+    print("10 / 0 =", err)
+else
+    print("Caught error:", err)
+end
+
+print("pcall test finished.")
