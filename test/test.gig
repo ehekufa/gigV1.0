@@ -1,27 +1,25 @@
-print("=== pcall test ===")
+print("=== GIG test.gig loaded! ===")
+print("GIG is working correctly.")
 
--- Функция, которая может выбросить ошибку
-function divide(a, b)
-    if b == 0 then
-        error("division by zero!")   -- выбросить ошибку
+clear()
+draw_rect(50, 50, 200, 100, 255, 0, 0)
+draw_circle(300, 200, 80, 0, 255, 0)
+draw_text(50, 300, "Press SPACE to exit")
+
+local x = 0
+while x < 500 do
+    clear()
+    draw_rect(50, 50, 200, 100, 255, 0, 0)
+    draw_circle(300, 200, 80, 0, 255, 0)
+    draw_text(50, 300, "Press SPACE to exit")
+    draw_rect(x, 350, 30, 30, 255, 255, 0)
+    update()
+    
+    if key_pressed("space") then
+        print("Space pressed!")
+        break
     end
-    return a / b
+    x = x + 5
 end
 
--- Успешный вызов
-local ok, result = pcall(divide, 10, 2)
-if ok then
-    print("10 / 2 =", result)
-else
-    print("Error:", result)
-end
-
--- Вызов с ошибкой
-local ok2, err = pcall(divide, 10, 0)
-if ok2 then
-    print("10 / 0 =", err)
-else
-    print("Caught error:", err)
-end
-
-print("pcall test finished.")
+print("Script finished")
