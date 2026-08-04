@@ -2,9 +2,13 @@ name: Build GIG
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - "**"
+
   pull_request:
-    branches: [main, master]
+    branches:
+      - "**"
+
   workflow_dispatch:
     inputs:
       free_debug:
@@ -49,7 +53,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ARMv7 (32-bit) and ARMv8 (64-bit)
         abi:
           - armeabi-v7a
           - arm64-v8a
